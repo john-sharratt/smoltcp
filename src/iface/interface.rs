@@ -1580,7 +1580,8 @@ impl<'a> InterfaceInner<'a> {
     ) -> Result<Option<IpPacket<'frame>>> {
         let ipv4_repr = Ipv4Repr::parse(ipv4_packet, &self.caps.checksum)?;
 
-        if !self.is_unicast_v4(ipv4_repr.src_addr) {
+        if !self.is_unicast_v4(ipv4_repr.src_addr) &&
+           ipv4_repr.src_addr.is_unspecified() == false {
             // Discard packets with non-unicast source addresses.
             net_debug!("non-unicast source address");
             return Err(Error::Malformed);
