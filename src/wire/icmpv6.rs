@@ -569,6 +569,7 @@ impl<'a> Repr<'a> {
             Ok((payload, repr))
         }
         // Valid checksum is expected.
+        #[cfg(not(feature = "ignore_checksums"))]
         if checksum_caps.icmpv6.rx() && !packet.verify_checksum(src_addr, dst_addr) {
             return Err(Error::Checksum);
         }

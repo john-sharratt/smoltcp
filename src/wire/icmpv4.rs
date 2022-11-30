@@ -385,6 +385,7 @@ impl<'a> Repr<'a> {
         T: AsRef<[u8]> + ?Sized,
     {
         // Valid checksum is expected.
+        #[cfg(not(feature = "ignore_checksums"))]
         if checksum_caps.icmpv4.rx() && !packet.verify_checksum() {
             return Err(Error::Checksum);
         }

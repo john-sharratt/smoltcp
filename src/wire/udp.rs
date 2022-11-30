@@ -224,6 +224,7 @@ impl Repr {
             return Err(Error::Malformed);
         }
         // Valid checksum is expected...
+        #[cfg(not(feature = "ignore_checksums"))]
         if checksum_caps.udp.rx() && !packet.verify_checksum(src_addr, dst_addr) {
             match (src_addr, dst_addr) {
                 // ... except on UDP-over-IPv4, where it can be omitted.

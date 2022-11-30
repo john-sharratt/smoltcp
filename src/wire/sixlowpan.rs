@@ -1524,6 +1524,7 @@ pub mod nhc {
                 checksum::data(packet.payload()),
             ]);
 
+            #[cfg(not(feature = "ignore_checksums"))]
             if let Some(checksum) = packet.checksum() {
                 if chk_sum != checksum {
                     return Err(Error::Checksum);

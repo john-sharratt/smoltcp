@@ -614,6 +614,7 @@ impl Repr {
             return Err(Error::Malformed);
         }
         // Valid checksum is expected.
+        #[cfg(not(feature = "ignore_checksums"))]
         if checksum_caps.ipv4.rx() && !packet.verify_checksum() {
             return Err(Error::Checksum);
         }
