@@ -210,6 +210,7 @@ pub struct Repr {
 
 impl Repr {
     /// Parse an User Datagram Protocol packet and return a high-level representation.
+    #[cfg_attr(feature = "ignore_checksums", allow(unused_variables))]
     pub fn parse<T>(
         packet: &Packet<&T>,
         src_addr: &IpAddress,

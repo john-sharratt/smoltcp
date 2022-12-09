@@ -790,6 +790,7 @@ pub struct Repr<'a> {
 
 impl<'a> Repr<'a> {
     /// Parse a Transmission Control Protocol packet and return a high-level representation.
+    #[cfg_attr(feature = "ignore_checksums", allow(unused_variables))]
     pub fn parse<T>(
         packet: &Packet<&'a T>,
         src_addr: &IpAddress,

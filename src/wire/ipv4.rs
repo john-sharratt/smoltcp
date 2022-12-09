@@ -605,6 +605,7 @@ pub struct Repr {
 
 impl Repr {
     /// Parse an Internet Protocol version 4 packet and return a high-level representation.
+    #[cfg_attr(feature = "ignore_checksums", allow(unused_variables))]
     pub fn parse<T: AsRef<[u8]> + ?Sized>(
         packet: &Packet<&T>,
         checksum_caps: &ChecksumCapabilities,

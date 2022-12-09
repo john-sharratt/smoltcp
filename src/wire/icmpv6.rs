@@ -540,6 +540,7 @@ pub enum Repr<'a> {
 impl<'a> Repr<'a> {
     /// Parse an Internet Control Message Protocol version 6 packet and return
     /// a high-level representation.
+    #[cfg_attr(feature = "ignore_checksums", allow(unused_variables))]
     pub fn parse<T>(
         src_addr: &IpAddress,
         dst_addr: &IpAddress,
