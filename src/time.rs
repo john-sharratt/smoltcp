@@ -110,6 +110,15 @@ impl From<::std::time::Instant> for Instant {
 }
 
 #[cfg(feature = "std")]
+impl Into<::std::time::Instant> for Instant {
+    fn into(self) -> ::std::time::Instant {
+        let elapsed = self.total_micros() as u64;
+        let now = ::std::time::Instant::now();
+        now.checked_sub(std::time::Duration::from_micros(elapsed)).unwrap_or(now)
+    }
+}
+
+#[cfg(feature = "std")]
 impl From<::std::time::SystemTime> for Instant {
     fn from(other: ::std::time::SystemTime) -> Instant {
         let n = other
