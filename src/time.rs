@@ -118,6 +118,22 @@ impl Into<::std::time::Instant> for Instant {
     }
 }
 
+impl From<::std::sync::atomic::AtomicI64> for Instant {
+    fn from(other: ::std::sync::atomic::AtomicI64) -> Self {
+        let elapsed = other.load(::std::sync::atomic::Ordering::Acquire);
+        Self {
+            micros: elapsed
+        }
+    }
+}
+
+impl Into<::std::sync::atomic::AtomicI64> for Instant {
+    fn into(self) -> ::std::sync::atomic::AtomicI64 {
+        let elapsed = self.total_micros();
+        ::std::sync::atomic::AtomicI64::new(elapsed)
+    }
+}
+
 #[cfg(feature = "std")]
 impl From<::std::time::SystemTime> for Instant {
     fn from(other: ::std::time::SystemTime) -> Instant {
