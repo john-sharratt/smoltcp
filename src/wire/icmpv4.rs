@@ -427,7 +427,6 @@ impl<'a> Repr<'a> {
                 })
             }
             _ => {
-                log::error!("BLAH1");
                 Err(Error::Unrecognized)
             }
         }
