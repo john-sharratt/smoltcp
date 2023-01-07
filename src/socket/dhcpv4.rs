@@ -181,7 +181,7 @@ impl Dhcpv4Socket {
         self.ignore_naks = ignore_naks;
     }
 
-    pub(crate) fn poll_at(&self, _cx: &mut Context) -> PollAt {
+    pub(crate) fn poll_at(&self, _cx: &Context) -> PollAt {
         let t = match &self.state {
             ClientState::Discovering(state) => state.retry_at,
             ClientState::Requesting(state) => state.retry_at,

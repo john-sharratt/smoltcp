@@ -816,6 +816,32 @@ where
             .min()
     }
 
+    /// Return a _soft deadline_ for calling [poll] the next time.
+    /// The [Instant] returned is the time at which you should call [poll] next.
+    /// It is harmless (but wastes energy) to call it before the [Instant], and
+    /// potentially harmful (impacting quality of service) to call it after the
+    /// [Instant]
+    ///
+    /// [poll]: #method.poll
+    /// [Instant]: struct.Instant.html
+    pub fn poll_peek(&self) -> Option<Instant> {
+        let inner = &self.inner;
+        self.sockets
+            .iter()
+            .filter_map(move |item| {
+                let socket_poll_at = item.socket.poll_at(inner);
+                match item
+                    .meta
+                    .poll_at(socket_poll_at, |ip_addr| inner.has_neighbor(&ip_addr))
+                {
+                    PollAt::Ingress => None,
+                    PollAt::Time(instant) => Some(instant),
+                    PollAt::Now => Some(Instant::from_millis(0)),
+                }
+            })
+            .min()
+    }
+
     /// Return an _advisory wait time_ for calling [poll] the next time.
     /// The [Duration] returned is the time left to wait before calling [poll] next.
     /// It is harmless (but wastes energy) to call it before the [Duration] has passed,
