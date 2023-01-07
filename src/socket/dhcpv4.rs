@@ -632,6 +632,7 @@ mod test {
         assert_eq!(i, reprs.len());
     }
 
+    #[allow(unused)]
     macro_rules! send {
         ($socket:ident, $repr:expr) =>
             (send!($socket, time 0, $repr));

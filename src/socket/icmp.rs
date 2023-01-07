@@ -388,18 +388,16 @@ impl<'a> IcmpSocket<'a> {
                     // If we are bound to a RAW identifier value, only accept an
                     // packets destined for a specific IP address
                     #[cfg(feature = "proto-ipv4")]
-                    (
-                        &Endpoint::Ip(ip),
-                        &IpRepr::Ipv4(ip_repr),
-                    ) => ip == IpAddress::Ipv4(ip_repr.dst_addr),
+                    (&Endpoint::Ip(ip), &IpRepr::Ipv4(ip_repr)) => {
+                        ip == IpAddress::Ipv4(ip_repr.dst_addr)
+                    }
                     #[cfg(feature = "proto-ipv6")]
-                    (
-                        &Endpoint::Ip(ip),
-                        &IpRepr::Ipv6(ip_repr),
-                    ) => ip == IpAddress::Ipv6(ip_repr.dst_addr),
+                    (&Endpoint::Ip(ip), &IpRepr::Ipv6(ip_repr)) => {
+                        ip == IpAddress::Ipv6(ip_repr.dst_addr)
+                    }
                     _ => false,
                 }
-            },
+            }
         }
     }
 
@@ -472,11 +470,15 @@ impl<'a> IcmpSocket<'a> {
                     let src_addr = match endpoint {
                         Endpoint::Udp(IpEndpoint { addr, .. }) => match addr {
                             IpAddress::Ipv4(addr) => addr,
-                            _ => { return Err(Error::Unaddressable); }
+                            _ => {
+                                return Err(Error::Unaddressable);
+                            }
                         },
                         Endpoint::Ip(IpAddress::Ipv4(addr)) => addr,
-                        Endpoint::Ip(_) => { return Err(Error::Unaddressable); },
-                        _ => Ipv4Address::default()
+                        Endpoint::Ip(_) => {
+                            return Err(Error::Unaddressable);
+                        }
+                        _ => Ipv4Address::default(),
                     };
                     let ip_repr = IpRepr::Ipv4(Ipv4Repr {
                         src_addr,
@@ -493,11 +495,15 @@ impl<'a> IcmpSocket<'a> {
                     let src_addr = match endpoint {
                         Endpoint::Udp(IpEndpoint { addr, .. }) => match addr {
                             IpAddress::Ipv6(addr) => addr,
-                            _ => { return Err(Error::Unaddressable); }
+                            _ => {
+                                return Err(Error::Unaddressable);
+                            }
                         },
                         Endpoint::Ip(IpAddress::Ipv6(addr)) => addr,
-                        Endpoint::Ip(_) => { return Err(Error::Unaddressable); },
-                        _ => Ipv6Address::default()
+                        Endpoint::Ip(_) => {
+                            return Err(Error::Unaddressable);
+                        }
+                        _ => Ipv6Address::default(),
                     };
                     let repr = Icmpv6Repr::parse(
                         &src_addr.into(),
@@ -1128,8 +1134,6 @@ mod test_ipv6 {
         assert!(!socket.can_recv());
     }
 
-
-
     #[test]
     fn test_accepts_ip() {
         let mut socket = socket(buffer(1), buffer(1));
@@ -1161,7 +1165,7 @@ mod test_ipv6 {
         });
 
         assert!(!socket.can_recv());
-        
+
         assert!(socket.accepts(&mut cx, &ip_repr, &icmp_repr.into()));
         assert_eq!(socket.process(&mut cx, &ip_repr, &icmp_repr.into()), Ok(()));
         assert!(socket.can_recv());

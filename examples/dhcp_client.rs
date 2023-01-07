@@ -60,7 +60,7 @@ fn main() {
             debug!("poll error: {}", e);
         }
 
-        let event = iface.get_socket::<Dhcpv4Socket>(dhcp_handle).poll();
+        let event = iface.get_socket_mut::<Dhcpv4Socket>(dhcp_handle).poll();
         match event {
             None => {}
             Some(Dhcpv4Event::Configured(config)) => {

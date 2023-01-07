@@ -808,7 +808,7 @@ impl<'a> Repr<'a> {
             return Err(Error::Malformed);
         }
         // Valid checksum is expected.
-        #[cfg(not(feature = "ignore_checksums"))]        
+        #[cfg(not(feature = "ignore_checksums"))]
         if checksum_caps.tcp.rx() && !packet.verify_checksum(src_addr, dst_addr) {
             return Err(Error::Checksum);
         }

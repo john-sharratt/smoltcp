@@ -80,7 +80,7 @@ fn main() {
         }
 
         // udp:6969: respond "hello"
-        let socket = iface.get_socket::<UdpSocket>(udp_handle);
+        let socket = iface.get_socket_mut::<UdpSocket>(udp_handle);
         if !socket.is_open() {
             socket.bind(6969).unwrap()
         }
@@ -106,7 +106,7 @@ fn main() {
         }
 
         // tcp:6969: respond "hello"
-        let socket = iface.get_socket::<TcpSocket>(tcp1_handle);
+        let socket = iface.get_socket_mut::<TcpSocket>(tcp1_handle);
         if !socket.is_open() {
             socket.listen(6969).unwrap();
         }
@@ -119,7 +119,7 @@ fn main() {
         }
 
         // tcp:6970: echo with reverse
-        let socket = iface.get_socket::<TcpSocket>(tcp2_handle);
+        let socket = iface.get_socket_mut::<TcpSocket>(tcp2_handle);
         if !socket.is_open() {
             socket.listen(6970).unwrap()
         }
@@ -161,7 +161,7 @@ fn main() {
         }
 
         // tcp:6971: sinkhole
-        let socket = iface.get_socket::<TcpSocket>(tcp3_handle);
+        let socket = iface.get_socket_mut::<TcpSocket>(tcp3_handle);
         if !socket.is_open() {
             socket.listen(6971).unwrap();
             socket.set_keep_alive(Some(Duration::from_millis(1000)));
@@ -182,7 +182,7 @@ fn main() {
         }
 
         // tcp:6972: fountain
-        let socket = iface.get_socket::<TcpSocket>(tcp4_handle);
+        let socket = iface.get_socket_mut::<TcpSocket>(tcp4_handle);
         if !socket.is_open() {
             socket.listen(6972).unwrap()
         }

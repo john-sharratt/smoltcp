@@ -426,7 +426,10 @@ impl<'a> Repr<'a> {
                     data: payload,
                 })
             }
-            _ => Err(Error::Unrecognized),
+            _ => {
+                log::error!("BLAH1");
+                Err(Error::Unrecognized)
+            }
         }
     }
 

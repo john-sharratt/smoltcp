@@ -127,7 +127,7 @@ fn main() {
             }
         }
 
-        let mut socket = iface.get_socket::<TcpSocket>(server_handle);
+        let mut socket = iface.get_socket_mut::<TcpSocket>(server_handle);
         if !socket.is_active() && !socket.is_listening() {
             if !did_listen {
                 debug!("listening");
@@ -145,7 +145,7 @@ fn main() {
             done = true;
         }
 
-        let (mut socket, cx) = iface.get_socket_and_context::<TcpSocket>(client_handle);
+        let (mut socket, cx) = iface.get_socket_and_context_mut::<TcpSocket>(client_handle);
         if !socket.is_open() {
             if !did_connect {
                 debug!("connecting");

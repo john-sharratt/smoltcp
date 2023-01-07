@@ -54,7 +54,7 @@ fn main() {
 
     let tcp_handle = iface.add_socket(tcp_socket);
 
-    let (socket, cx) = iface.get_socket_and_context::<TcpSocket>(tcp_handle);
+    let (socket, cx) = iface.get_socket_and_context_mut::<TcpSocket>(tcp_handle);
     socket.connect(cx, (address, port), 49500).unwrap();
 
     let mut tcp_active = false;
@@ -67,7 +67,7 @@ fn main() {
             }
         }
 
-        let socket = iface.get_socket::<TcpSocket>(tcp_handle);
+        let socket = iface.get_socket_mut::<TcpSocket>(tcp_handle);
         if socket.is_active() && !tcp_active {
             debug!("connected");
         } else if !socket.is_active() && tcp_active {
