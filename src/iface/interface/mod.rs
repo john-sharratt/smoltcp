@@ -35,6 +35,8 @@ use crate::socket::dns;
 use crate::socket::*;
 use crate::time::{Duration, Instant};
 use crate::wire::*;
+#[cfg(feature = "proto-igmp")]
+pub use igmp::MulticastError;
 
 const MAX_IP_ADDR_COUNT: usize = 5;
 #[cfg(feature = "proto-igmp")]
