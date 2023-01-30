@@ -16,3 +16,5 @@ mod socket_set;
 pub use self::interface::{Config, Interface, InterfaceInner as Context};
 pub use self::route::{Route, RouteTableFull, Routes};
 pub use socket_set::{SocketHandle, SocketSet, SocketStorage};
+#[cfg(feature = "proto-igmp")]
+pub use interface::MulticastError;
