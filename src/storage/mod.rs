@@ -12,6 +12,7 @@ mod ring_buffer;
 pub use self::assembler::Assembler;
 pub use self::packet_buffer::{PacketBuffer, PacketMetadata};
 pub use self::ring_buffer::RingBuffer;
+pub use self::assembler::AssemblerError;
 
 /// A trait for setting a value to a known state.
 ///

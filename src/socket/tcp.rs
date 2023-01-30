@@ -1844,9 +1844,19 @@ impl<'a> TcpSocket<'a> {
                     .write_unallocated(payload_offset, repr.payload);
                 debug_assert!(len_written == payload_len);
             }
-            Err(_) => {
+            Err(crate::storage::AssemblerError::TooManyHolesError) => {
                 net_debug!(
                     "tcp:{}:{}: assembler: too many holes to add {} octets at offset {}",
+                    self.local_endpoint,
+                    self.remote_endpoint,
+                    payload_len,
+                    payload_offset
+                );
+                return Err(Error::Dropped);
+            }
+            Err(crate::storage::AssemblerError::ArithmeticOverflow) => {
+                net_debug!(
+                    "tcp:{}:{}: assembler: arithmetic overflow while adding {} octets at offset {}",
                     self.local_endpoint,
                     self.remote_endpoint,
                     payload_len,
