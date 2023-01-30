@@ -111,7 +111,7 @@ impl<'a, H> PacketBuffer<'a, H> {
         *self.metadata_ring.enqueue_one()? = PacketMetadata::packet(size, header);
 
         let payload_buf = self.payload_ring.enqueue_many(size);
-        debug_assert!(payload_buf.len() == size);
+        debug_assert_eq!(payload_buf.len(), size);
         Ok(payload_buf)
     }
 
@@ -175,7 +175,7 @@ impl<'a, H> PacketBuffer<'a, H> {
         } = *self.metadata_ring.dequeue_one()?;
 
         let payload_buf = self.payload_ring.dequeue_many(size);
-        debug_assert!(payload_buf.len() == size);
+        debug_assert_eq!(payload_buf.len(), size);
         Ok((header.take().unwrap(), payload_buf))
     }
 

@@ -254,7 +254,7 @@ impl Assembler {
             }
         }
 
-        debug_assert!(size == 0);
+        debug_assert_eq!(size, 0);
         Ok(overlap != 0)
     }
 
