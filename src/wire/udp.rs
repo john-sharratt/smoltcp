@@ -1,13 +1,13 @@
 use byteorder::{ByteOrder, NetworkEndian};
 use core::fmt;
 
+use super::{Error, Result};
 use crate::phy::ChecksumCapabilities;
 use crate::wire::ip::checksum;
 use crate::wire::{IpAddress, IpProtocol};
-use crate::{Error, Result};
 
 /// A read/write wrapper around an User Datagram Protocol packet buffer.
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct Packet<T: AsRef<[u8]>> {
     buffer: T,
@@ -23,7 +23,7 @@ mod field {
     pub const LENGTH: Field = 4..6;
     pub const CHECKSUM: Field = 6..8;
 
-    pub fn PAYLOAD(length: u16) -> Field {
+    pub const fn PAYLOAD(length: u16) -> Field {
         CHECKSUM.end..(length as usize)
     }
 }
@@ -33,7 +33,7 @@ pub const HEADER_LEN: usize = field::CHECKSUM.end;
 #[allow(clippy::len_without_is_empty)]
 impl<T: AsRef<[u8]>> Packet<T> {
     /// Imbue a raw octet buffer with UDP packet structure.
-    pub fn new_unchecked(buffer: T) -> Packet<T> {
+    pub const fn new_unchecked(buffer: T) -> Packet<T> {
         Packet { buffer }
     }
 
@@ -48,8 +48,8 @@ impl<T: AsRef<[u8]>> Packet<T> {
     }
 
     /// Ensure that no accessor method will panic if called.
-    /// Returns `Err(Error::Truncated)` if the buffer is too short.
-    /// Returns `Err(Error::Malformed)` if the length field has a value smaller
+    /// Returns `Err(Error)` if the buffer is too short.
+    /// Returns `Err(Error)` if the length field has a value smaller
     /// than the header length.
     ///
     /// The result of this check is invalidated by calling [set_len].
@@ -58,13 +58,11 @@ impl<T: AsRef<[u8]>> Packet<T> {
     pub fn check_len(&self) -> Result<()> {
         let buffer_len = self.buffer.as_ref().len();
         if buffer_len < HEADER_LEN {
-            Err(Error::Truncated)
+            Err(Error)
         } else {
             let field_len = self.len() as usize;
-            if buffer_len < field_len {
-                Err(Error::Truncated)
-            } else if field_len < HEADER_LEN {
-                Err(Error::Malformed)
+            if buffer_len < field_len || field_len < HEADER_LEN {
+                Err(Error)
             } else {
                 Ok(())
             }
@@ -114,6 +112,14 @@ impl<T: AsRef<[u8]>> Packet<T> {
     /// This function always returns `true` when fuzzing.
     pub fn verify_checksum(&self, src_addr: &IpAddress, dst_addr: &IpAddress) -> bool {
         if cfg!(fuzzing) {
+            return true;
+        }
+
+        // From the RFC:
+        // > An all zero transmitted checksum value means that the transmitter
+        // > generated no checksum (for debugging or for higher level protocols
+        // > that don't care).
+        if self.checksum() == 0 {
             return true;
         }
 
@@ -222,7 +228,7 @@ impl Repr {
     {
         // Destination port cannot be omitted (but source port can be).
         if packet.dst_port() == 0 {
-            return Err(Error::Malformed);
+            return Err(Error);
         }
         // Valid checksum is expected...
         #[cfg(not(feature = "ignore_checksums"))]
@@ -231,7 +237,7 @@ impl Repr {
                 // ... except on UDP-over-IPv4, where it can be omitted.
                 #[cfg(feature = "proto-ipv4")]
                 (&IpAddress::Ipv4(_), &IpAddress::Ipv4(_)) if packet.checksum() == 0 => (),
-                _ => return Err(Error::Checksum),
+                _ => return Err(Error),
             }
         }
 
@@ -242,8 +248,23 @@ impl Repr {
     }
 
     /// Return the length of the packet header that will be emitted from this high-level representation.
-    pub fn header_len(&self) -> usize {
+    pub const fn header_len(&self) -> usize {
         HEADER_LEN
+    }
+
+    /// Emit a high-level representation into an User Datagram Protocol packet.
+    ///
+    /// This never calculates the checksum, and is intended for internal-use only,
+    /// not for packets that are going to be actually sent over the network. For
+    /// example, when decompressing 6lowpan.
+    pub(crate) fn emit_header<T: ?Sized>(&self, packet: &mut Packet<&mut T>, payload_len: usize)
+    where
+        T: AsRef<[u8]> + AsMut<[u8]>,
+    {
+        packet.set_src_port(self.src_port);
+        packet.set_dst_port(self.dst_port);
+        packet.set_len((HEADER_LEN + payload_len) as u16);
+        packet.set_checksum(0);
     }
 
     /// Emit a high-level representation into an User Datagram Protocol packet.
@@ -301,8 +322,8 @@ impl<T: AsRef<[u8]>> PrettyPrint for Packet<T> {
         indent: &mut PrettyIndent,
     ) -> fmt::Result {
         match Packet::new_checked(buffer) {
-            Err(err) => write!(f, "{}({})", indent, err),
-            Ok(packet) => write!(f, "{}{}", indent, packet),
+            Err(err) => write!(f, "{indent}({err})"),
+            Ok(packet) => write!(f, "{indent}{packet}"),
         }
     }
 }
@@ -354,7 +375,7 @@ mod test {
         packet.set_checksum(0xffff);
         packet.payload_mut().copy_from_slice(&PAYLOAD_BYTES[..]);
         packet.fill_checksum(&SRC_ADDR.into(), &DST_ADDR.into());
-        assert_eq!(&packet.into_inner()[..], &PACKET_BYTES[..]);
+        assert_eq!(&*packet.into_inner(), &PACKET_BYTES[..]);
     }
 
     #[test]
@@ -362,7 +383,7 @@ mod test {
         let mut bytes = vec![0; 12];
         let mut packet = Packet::new_unchecked(&mut bytes);
         packet.set_len(4);
-        assert_eq!(packet.check_len(), Err(Error::Malformed));
+        assert_eq!(packet.check_len(), Err(Error));
     }
 
     #[test]
@@ -375,6 +396,18 @@ mod test {
         packet.set_len(8);
         packet.fill_checksum(&SRC_ADDR.into(), &DST_ADDR.into());
         assert_eq!(packet.checksum(), 0xffff);
+    }
+
+    #[test]
+    #[cfg(feature = "proto-ipv4")]
+    fn test_no_checksum() {
+        let mut bytes = vec![0; 8];
+        let mut packet = Packet::new_unchecked(&mut bytes);
+        packet.set_src_port(1);
+        packet.set_dst_port(31881);
+        packet.set_len(8);
+        packet.set_checksum(0);
+        assert!(packet.verify_checksum(&SRC_ADDR.into(), &DST_ADDR.into()));
     }
 
     #[cfg(feature = "proto-ipv4")]
@@ -413,7 +446,7 @@ mod test {
             |payload| payload.copy_from_slice(&PAYLOAD_BYTES),
             &ChecksumCapabilities::default(),
         );
-        assert_eq!(&packet.into_inner()[..], &PACKET_BYTES[..]);
+        assert_eq!(&*packet.into_inner(), &PACKET_BYTES[..]);
     }
 
     #[test]

@@ -12,7 +12,6 @@ mod ring_buffer;
 pub use self::assembler::Assembler;
 pub use self::packet_buffer::{PacketBuffer, PacketMetadata};
 pub use self::ring_buffer::RingBuffer;
-pub use self::assembler::AssemblerError;
 
 /// A trait for setting a value to a known state.
 ///
@@ -20,3 +19,13 @@ pub use self::assembler::AssemblerError;
 pub trait Resettable {
     fn reset(&mut self);
 }
+
+/// Error returned when enqueuing into a full buffer.
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+pub struct Full;
+
+/// Error returned when dequeuing from an empty buffer.
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+pub struct Empty;

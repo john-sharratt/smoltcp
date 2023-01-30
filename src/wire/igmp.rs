@@ -1,9 +1,9 @@
 use byteorder::{ByteOrder, NetworkEndian};
 use core::fmt;
 
+use super::{Error, Result};
 use crate::time::Duration;
 use crate::wire::ip::checksum;
-use crate::{Error, Result};
 
 use crate::wire::Ipv4Address;
 
@@ -44,7 +44,7 @@ impl fmt::Display for Message {
             Message::MembershipReportV2 => write!(f, "version 2 membership report"),
             Message::LeaveGroup => write!(f, "leave group"),
             Message::MembershipReportV1 => write!(f, "version 1 membership report"),
-            Message::Unknown(id) => write!(f, "{}", id),
+            Message::Unknown(id) => write!(f, "{id}"),
         }
     }
 }
@@ -54,7 +54,7 @@ impl fmt::Display for Message {
 /// [RFC 2236]: https://tools.ietf.org/html/rfc2236
 impl<T: AsRef<[u8]>> Packet<T> {
     /// Imbue a raw octet buffer with IGMPv2 packet structure.
-    pub fn new_unchecked(buffer: T) -> Packet<T> {
+    pub const fn new_unchecked(buffer: T) -> Packet<T> {
         Packet { buffer }
     }
 
@@ -69,11 +69,11 @@ impl<T: AsRef<[u8]>> Packet<T> {
     }
 
     /// Ensure that no accessor method will panic if called.
-    /// Returns `Err(Error::Truncated)` if the buffer is too short.
+    /// Returns `Err(Error)` if the buffer is too short.
     pub fn check_len(&self) -> Result<()> {
         let len = self.buffer.as_ref().len();
-        if len < field::GROUP_ADDRESS.end as usize {
-            Err(Error::Truncated)
+        if len < field::GROUP_ADDRESS.end {
+            Err(Error)
         } else {
             Ok(())
         }
@@ -208,7 +208,7 @@ impl Repr {
         // Check if the address is 0.0.0.0 or multicast
         let addr = packet.group_addr();
         if !addr.is_unspecified() && !addr.is_multicast() {
-            return Err(Error::Malformed);
+            return Err(Error);
         }
 
         // construct a packet based on the Type field
@@ -241,12 +241,12 @@ impl Repr {
                     version: IgmpVersion::Version1,
                 })
             }
-            _ => Err(Error::Unrecognized),
+            _ => Err(Error),
         }
     }
 
     /// Return the length of a packet that will be emitted from this high-level representation.
-    pub fn buffer_len(&self) -> usize {
+    pub const fn buffer_len(&self) -> usize {
         // always 8 bytes
         field::GROUP_ADDRESS.end
     }
@@ -304,7 +304,7 @@ fn max_resp_code_to_duration(value: u8) -> Duration {
     Duration::from_millis(decisecs * 100)
 }
 
-fn duration_to_max_resp_code(duration: Duration) -> u8 {
+const fn duration_to_max_resp_code(duration: Duration) -> u8 {
     let decisecs = duration.total_millis() / 100;
     if decisecs < 128 {
         decisecs as u8
@@ -324,13 +324,13 @@ fn duration_to_max_resp_code(duration: Duration) -> u8 {
 impl<'a, T: AsRef<[u8]> + ?Sized> fmt::Display for Packet<&'a T> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match Repr::parse(self) {
-            Ok(repr) => write!(f, "{}", repr),
-            Err(err) => write!(f, "IGMP ({})", err),
+            Ok(repr) => write!(f, "{repr}"),
+            Err(err) => write!(f, "IGMP ({err})"),
         }
     }
 }
 
-impl<'a> fmt::Display for Repr {
+impl fmt::Display for Repr {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
             Repr::MembershipQuery {
@@ -339,19 +339,17 @@ impl<'a> fmt::Display for Repr {
                 version,
             } => write!(
                 f,
-                "IGMP membership query max_resp_time={} group_addr={} version={:?}",
-                max_resp_time, group_addr, version
+                "IGMP membership query max_resp_time={max_resp_time} group_addr={group_addr} version={version:?}"
             ),
             Repr::MembershipReport {
                 group_addr,
                 version,
             } => write!(
                 f,
-                "IGMP membership report group_addr={} version={:?}",
-                group_addr, version
+                "IGMP membership report group_addr={group_addr} version={version:?}"
             ),
             Repr::LeaveGroup { group_addr } => {
-                write!(f, "IGMP leave group group_addr={})", group_addr)
+                write!(f, "IGMP leave group group_addr={group_addr})")
             }
         }
     }
@@ -366,8 +364,8 @@ impl<T: AsRef<[u8]>> PrettyPrint for Packet<T> {
         indent: &mut PrettyIndent,
     ) -> fmt::Result {
         match Packet::new_checked(buffer) {
-            Err(err) => writeln!(f, "{}({})", indent, err),
-            Ok(packet) => writeln!(f, "{}{}", indent, packet),
+            Err(err) => writeln!(f, "{indent}({err})"),
+            Ok(packet) => writeln!(f, "{indent}{packet}"),
         }
     }
 }
@@ -413,7 +411,7 @@ mod test {
         packet.set_max_resp_code(0);
         packet.set_group_address(Ipv4Address::from_bytes(&[224, 0, 6, 150]));
         packet.fill_checksum();
-        assert_eq!(&packet.into_inner()[..], &LEAVE_PACKET_BYTES[..]);
+        assert_eq!(&*packet.into_inner(), &LEAVE_PACKET_BYTES[..]);
     }
 
     #[test]
@@ -424,7 +422,7 @@ mod test {
         packet.set_max_resp_code(0);
         packet.set_group_address(Ipv4Address::from_bytes(&[225, 0, 0, 37]));
         packet.fill_checksum();
-        assert_eq!(&packet.into_inner()[..], &REPORT_PACKET_BYTES[..]);
+        assert_eq!(&*packet.into_inner(), &REPORT_PACKET_BYTES[..]);
     }
 
     #[test]

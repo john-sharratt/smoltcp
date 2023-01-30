@@ -2,22 +2,19 @@ use core::fmt;
 
 use crate::phy::{self, Device, DeviceCapabilities, Medium};
 use crate::time::Instant;
-use crate::{
-    wire::pretty_print::{PrettyIndent, PrettyPrint},
-    Result,
-};
+use crate::wire::pretty_print::{PrettyIndent, PrettyPrint};
 
 /// A tracer device.
 ///
 /// A tracer is a device that pretty prints all packets traversing it
 /// using the provided writer function, and then passes them to another
 /// device.
-pub struct Tracer<D: for<'a> Device<'a>> {
+pub struct Tracer<D: Device> {
     inner: D,
     writer: fn(Instant, Packet),
 }
 
-impl<D: for<'a> Device<'a>> Tracer<D> {
+impl<D: Device> Tracer<D> {
     /// Create a tracer device.
     pub fn new(inner: D, writer: fn(timestamp: Instant, packet: Packet)) -> Tracer<D> {
         Tracer { inner, writer }
@@ -44,49 +41,53 @@ impl<D: for<'a> Device<'a>> Tracer<D> {
     }
 }
 
-impl<'a, D> Device<'a> for Tracer<D>
-where
-    D: for<'b> Device<'b>,
-{
-    type RxToken = RxToken<<D as Device<'a>>::RxToken>;
-    type TxToken = TxToken<<D as Device<'a>>::TxToken>;
+impl<D: Device> Device for Tracer<D> {
+    type RxToken<'a> = RxToken<D::RxToken<'a>>
+    where
+        Self: 'a;
+    type TxToken<'a> = TxToken<D::TxToken<'a>>
+    where
+        Self: 'a;
 
     fn capabilities(&self) -> DeviceCapabilities {
         self.inner.capabilities()
     }
 
-    fn receive(&'a mut self) -> Option<(Self::RxToken, Self::TxToken)> {
+    fn receive(&mut self, timestamp: Instant) -> Option<(Self::RxToken<'_>, Self::TxToken<'_>)> {
         let &mut Self {
             ref mut inner,
             writer,
             ..
         } = self;
         let medium = inner.capabilities().medium;
-        inner.receive().map(|(rx_token, tx_token)| {
+        inner.receive(timestamp).map(|(rx_token, tx_token)| {
             let rx = RxToken {
                 token: rx_token,
                 writer,
                 medium,
+                timestamp,
             };
             let tx = TxToken {
                 token: tx_token,
                 writer,
                 medium,
+                timestamp,
             };
             (rx, tx)
         })
     }
 
-    fn transmit(&'a mut self) -> Option<Self::TxToken> {
+    fn transmit(&mut self, timestamp: Instant) -> Option<Self::TxToken<'_>> {
         let &mut Self {
             ref mut inner,
             writer,
         } = self;
         let medium = inner.capabilities().medium;
-        inner.transmit().map(|tx_token| TxToken {
+        inner.transmit(timestamp).map(|tx_token| TxToken {
             token: tx_token,
             medium,
             writer,
+            timestamp,
         })
     }
 }
@@ -96,24 +97,20 @@ pub struct RxToken<Rx: phy::RxToken> {
     token: Rx,
     writer: fn(Instant, Packet),
     medium: Medium,
+    timestamp: Instant,
 }
 
 impl<Rx: phy::RxToken> phy::RxToken for RxToken<Rx> {
-    fn consume<R, F>(self, timestamp: Instant, f: F) -> Result<R>
+    fn consume<R, F>(self, f: F) -> R
     where
-        F: FnOnce(&mut [u8]) -> Result<R>,
+        F: FnOnce(&mut [u8]) -> R,
     {
-        let Self {
-            token,
-            writer,
-            medium,
-        } = self;
-        token.consume(timestamp, |buffer| {
-            writer(
-                timestamp,
+        self.token.consume(|buffer| {
+            (self.writer)(
+                self.timestamp,
                 Packet {
                     buffer,
-                    medium,
+                    medium: self.medium,
                     prefix: "<- ",
                 },
             );
@@ -127,25 +124,21 @@ pub struct TxToken<Tx: phy::TxToken> {
     token: Tx,
     writer: fn(Instant, Packet),
     medium: Medium,
+    timestamp: Instant,
 }
 
 impl<Tx: phy::TxToken> phy::TxToken for TxToken<Tx> {
-    fn consume<R, F>(self, timestamp: Instant, len: usize, f: F) -> Result<R>
+    fn consume<R, F>(self, len: usize, f: F) -> R
     where
-        F: FnOnce(&mut [u8]) -> Result<R>,
+        F: FnOnce(&mut [u8]) -> R,
     {
-        let Self {
-            token,
-            writer,
-            medium,
-        } = self;
-        token.consume(timestamp, len, |buffer| {
+        self.token.consume(len, |buffer| {
             let result = f(buffer);
-            writer(
-                timestamp,
+            (self.writer)(
+                self.timestamp,
                 Packet {
                     buffer,
-                    medium,
+                    medium: self.medium,
                     prefix: "-> ",
                 },
             );

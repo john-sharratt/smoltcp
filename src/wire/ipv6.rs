@@ -3,10 +3,10 @@
 use byteorder::{ByteOrder, NetworkEndian};
 use core::fmt;
 
+use super::{Error, Result};
 use crate::wire::ip::pretty_print_ip_payload;
 #[cfg(feature = "proto-ipv4")]
 use crate::wire::ipv4;
-use crate::{Error, Result};
 
 pub use super::IpProtocol as Protocol;
 
@@ -15,28 +15,38 @@ pub use super::IpProtocol as Protocol;
 /// [RFC 8200 § 5]: https://tools.ietf.org/html/rfc8200#section-5
 pub const MIN_MTU: usize = 1280;
 
+/// Size of IPv6 adderess in octets.
+///
+/// [RFC 8200 § 2]: https://www.rfc-editor.org/rfc/rfc4291#section-2
+pub const ADDR_SIZE: usize = 16;
+
+/// Size of IPv4-mapping prefix in octets.
+///
+/// [RFC 8200 § 2]: https://www.rfc-editor.org/rfc/rfc4291#section-2
+pub const IPV4_MAPPED_PREFIX_SIZE: usize = ADDR_SIZE - 4; // 4 == ipv4::ADDR_SIZE , cannot DRY here because of dependency on a IPv4 module which is behind the feature
+
 /// A sixteen-octet IPv6 address.
 #[derive(Debug, Hash, PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Default)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
-pub struct Address(pub [u8; 16]);
+pub struct Address(pub [u8; ADDR_SIZE]);
 
 impl Address {
     /// The [unspecified address].
     ///
     /// [unspecified address]: https://tools.ietf.org/html/rfc4291#section-2.5.2
-    pub const UNSPECIFIED: Address = Address([0x00; 16]);
+    pub const UNSPECIFIED: Address = Address([0x00; ADDR_SIZE]);
 
-    /// The link-local [all routers multicast address].
+    /// The link-local [all nodes multicast address].
     ///
-    /// [all routers multicast address]: https://tools.ietf.org/html/rfc4291#section-2.7.1
+    /// [all nodes multicast address]: https://tools.ietf.org/html/rfc4291#section-2.7.1
     pub const LINK_LOCAL_ALL_NODES: Address = Address([
         0xff, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
         0x01,
     ]);
 
-    /// The link-local [all nodes multicast address].
+    /// The link-local [all routers multicast address].
     ///
-    /// [all nodes multicast address]: https://tools.ietf.org/html/rfc4291#section-2.7.1
+    /// [all routers multicast address]: https://tools.ietf.org/html/rfc4291#section-2.7.1
     pub const LINK_LOCAL_ALL_ROUTERS: Address = Address([
         0xff, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
         0x02,
@@ -50,19 +60,42 @@ impl Address {
         0x01,
     ]);
 
+    /// The prefix used in [IPv4-mapped addresses].
+    ///
+    /// [IPv4-mapped addresses]: https://www.rfc-editor.org/rfc/rfc4291#section-2.5.5.2
+    pub const IPV4_MAPPED_PREFIX: [u8; IPV4_MAPPED_PREFIX_SIZE] =
+        [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xff, 0xff];
+
     /// Construct an IPv6 address from parts.
     #[allow(clippy::too_many_arguments)]
-    pub fn new(a0: u16, a1: u16, a2: u16, a3: u16, a4: u16, a5: u16, a6: u16, a7: u16) -> Address {
-        let mut addr = [0u8; 16];
-        NetworkEndian::write_u16(&mut addr[0..2], a0);
-        NetworkEndian::write_u16(&mut addr[2..4], a1);
-        NetworkEndian::write_u16(&mut addr[4..6], a2);
-        NetworkEndian::write_u16(&mut addr[6..8], a3);
-        NetworkEndian::write_u16(&mut addr[8..10], a4);
-        NetworkEndian::write_u16(&mut addr[10..12], a5);
-        NetworkEndian::write_u16(&mut addr[12..14], a6);
-        NetworkEndian::write_u16(&mut addr[14..16], a7);
-        Address(addr)
+    pub const fn new(
+        a0: u16,
+        a1: u16,
+        a2: u16,
+        a3: u16,
+        a4: u16,
+        a5: u16,
+        a6: u16,
+        a7: u16,
+    ) -> Address {
+        Address([
+            (a0 >> 8) as u8,
+            a0 as u8,
+            (a1 >> 8) as u8,
+            a1 as u8,
+            (a2 >> 8) as u8,
+            a2 as u8,
+            (a3 >> 8) as u8,
+            a3 as u8,
+            (a4 >> 8) as u8,
+            a4 as u8,
+            (a5 >> 8) as u8,
+            a5 as u8,
+            (a6 >> 8) as u8,
+            a6 as u8,
+            (a7 >> 8) as u8,
+            a7 as u8,
+        ])
     }
 
     /// Construct an IPv6 address from a sequence of octets, in big-endian.
@@ -70,7 +103,7 @@ impl Address {
     /// # Panics
     /// The function panics if `data` is not sixteen octets long.
     pub fn from_bytes(data: &[u8]) -> Address {
-        let mut bytes = [0; 16];
+        let mut bytes = [0; ADDR_SIZE];
         bytes.copy_from_slice(data);
         Address(bytes)
     }
@@ -81,7 +114,7 @@ impl Address {
     /// The function panics if `data` is not 8 words long.
     pub fn from_parts(data: &[u16]) -> Address {
         assert!(data.len() >= 8);
-        let mut bytes = [0; 16];
+        let mut bytes = [0; ADDR_SIZE];
         for (word_idx, chunk) in bytes.chunks_mut(2).enumerate() {
             NetworkEndian::write_u16(chunk, data[word_idx]);
         }
@@ -100,7 +133,7 @@ impl Address {
     }
 
     /// Return an IPv6 address as a sequence of octets, in big-endian.
-    pub fn as_bytes(&self) -> &[u8] {
+    pub const fn as_bytes(&self) -> &[u8] {
         &self.0
     }
 
@@ -114,7 +147,7 @@ impl Address {
     /// Query whether the IPv6 address is a [multicast address].
     ///
     /// [multicast address]: https://tools.ietf.org/html/rfc4291#section-2.7
-    pub fn is_multicast(&self) -> bool {
+    pub const fn is_multicast(&self) -> bool {
         self.0[0] == 0xff
     }
 
@@ -122,7 +155,7 @@ impl Address {
     ///
     /// [unspecified address]: https://tools.ietf.org/html/rfc4291#section-2.5.2
     pub fn is_unspecified(&self) -> bool {
-        self.0 == [0x00; 16]
+        self.0 == [0x00; ADDR_SIZE]
     }
 
     /// Query whether the IPv6 address is in the [link-local] scope.
@@ -143,33 +176,33 @@ impl Address {
     ///
     /// [IPv4 mapped IPv6 address]: https://tools.ietf.org/html/rfc4291#section-2.5.5.2
     pub fn is_ipv4_mapped(&self) -> bool {
-        self.0[0..12] == [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xff, 0xff]
+        self.0[..IPV4_MAPPED_PREFIX_SIZE] == Self::IPV4_MAPPED_PREFIX
     }
 
     #[cfg(feature = "proto-ipv4")]
     /// Convert an IPv4 mapped IPv6 address to an IPv4 address.
     pub fn as_ipv4(&self) -> Option<ipv4::Address> {
         if self.is_ipv4_mapped() {
-            Some(ipv4::Address::new(
-                self.0[12], self.0[13], self.0[14], self.0[15],
+            Some(ipv4::Address::from_bytes(
+                &self.0[IPV4_MAPPED_PREFIX_SIZE..],
             ))
         } else {
             None
         }
     }
 
-    /// Helper function used to mask an addres given a prefix.
+    /// Helper function used to mask an address given a prefix.
     ///
     /// # Panics
     /// This function panics if `mask` is greater than 128.
-    pub(super) fn mask(&self, mask: u8) -> [u8; 16] {
+    pub(super) fn mask(&self, mask: u8) -> [u8; ADDR_SIZE] {
         assert!(mask <= 128);
-        let mut bytes = [0u8; 16];
+        let mut bytes = [0u8; ADDR_SIZE];
         let idx = (mask as usize) / 8;
         let modulus = (mask as usize) % 8;
         let (first, second) = self.0.split_at(idx);
         bytes[0..idx].copy_from_slice(first);
-        if idx < 16 {
+        if idx < ADDR_SIZE {
             let part = second[0];
             bytes[idx] = part & (!(0xff >> modulus) as u8);
         }
@@ -217,7 +250,10 @@ impl fmt::Display for Address {
             return write!(
                 f,
                 "::ffff:{}.{}.{}.{}",
-                self.0[12], self.0[13], self.0[14], self.0[15]
+                self.0[IPV4_MAPPED_PREFIX_SIZE + 0],
+                self.0[IPV4_MAPPED_PREFIX_SIZE + 1],
+                self.0[IPV4_MAPPED_PREFIX_SIZE + 2],
+                self.0[IPV4_MAPPED_PREFIX_SIZE + 3]
             );
         }
 
@@ -245,22 +281,22 @@ impl fmt::Display for Address {
                     State::Tail
                 }
                 // Continue iterating without writing any characters until
-                // we hit anothing non-zero value.
+                // we hit a non-zero value.
                 (0, &State::Tail) => State::Tail,
                 // When the state is Head or Tail write a u16 in hexadecimal
                 // without the leading colon if the value is not 0.
                 (_, &State::Head) => {
-                    write!(f, "{:x}", word)?;
+                    write!(f, "{word:x}")?;
                     State::HeadBody
                 }
                 (_, &State::Tail) => {
-                    write!(f, "{:x}", word)?;
+                    write!(f, "{word:x}")?;
                     State::TailBody
                 }
                 // Write the u16 with a leading colon when parsing a value
                 // that isn't the first in a section
                 (_, &State::HeadBody) | (_, &State::TailBody) => {
-                    write!(f, ":{:x}", word)?;
+                    write!(f, ":{word:x}")?;
                     state
                 }
             }
@@ -273,10 +309,10 @@ impl fmt::Display for Address {
 /// Convert the given IPv4 address into a IPv4-mapped IPv6 address
 impl From<ipv4::Address> for Address {
     fn from(address: ipv4::Address) -> Self {
-        let octets = address.0;
-        Address([
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xff, 0xff, octets[0], octets[1], octets[2], octets[3],
-        ])
+        let mut b = [0_u8; ADDR_SIZE];
+        b[..Self::IPV4_MAPPED_PREFIX.len()].copy_from_slice(&Self::IPV4_MAPPED_PREFIX);
+        b[Self::IPV4_MAPPED_PREFIX.len()..].copy_from_slice(&address.0);
+        Self(b)
     }
 }
 
@@ -305,7 +341,7 @@ impl Cidr {
     ///
     /// # Panics
     /// This function panics if the prefix length is larger than 128.
-    pub fn new(address: Address, prefix_len: u8) -> Cidr {
+    pub const fn new(address: Address, prefix_len: u8) -> Cidr {
         assert!(prefix_len <= 128);
         Cidr {
             address,
@@ -314,12 +350,12 @@ impl Cidr {
     }
 
     /// Return the address of this IPv6 CIDR block.
-    pub fn address(&self) -> Address {
+    pub const fn address(&self) -> Address {
         self.address
     }
 
     /// Return the prefix length of this IPv6 CIDR block.
-    pub fn prefix_len(&self) -> u8 {
+    pub const fn prefix_len(&self) -> u8 {
         self.prefix_len
     }
 
@@ -331,8 +367,7 @@ impl Cidr {
             return true;
         }
 
-        let shift = 128 - self.prefix_len;
-        self.address.mask(shift) == addr.mask(shift)
+        self.address.mask(self.prefix_len) == addr.mask(self.prefix_len)
     }
 
     /// Query whether the subnetwork described by this IPV6 CIDR block contains
@@ -350,7 +385,7 @@ impl fmt::Display for Cidr {
 }
 
 /// A read/write wrapper around an Internet Protocol version 6 packet buffer.
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct Packet<T: AsRef<[u8]>> {
     buffer: T,
@@ -407,7 +442,7 @@ pub const HEADER_LEN: usize = field::DST_ADDR.end;
 impl<T: AsRef<[u8]>> Packet<T> {
     /// Create a raw octet buffer with an IPv6 packet structure.
     #[inline]
-    pub fn new_unchecked(buffer: T) -> Packet<T> {
+    pub const fn new_unchecked(buffer: T) -> Packet<T> {
         Packet { buffer }
     }
 
@@ -423,7 +458,7 @@ impl<T: AsRef<[u8]>> Packet<T> {
     }
 
     /// Ensure that no accessor method will panic if called.
-    /// Returns `Err(Error::Truncated)` if the buffer is too short.
+    /// Returns `Err(Error)` if the buffer is too short.
     ///
     /// The result of this check is invalidated by calling [set_payload_len].
     ///
@@ -432,7 +467,7 @@ impl<T: AsRef<[u8]>> Packet<T> {
     pub fn check_len(&self) -> Result<()> {
         let len = self.buffer.as_ref().len();
         if len < field::DST_ADDR.end || len < self.total_len() {
-            Err(Error::Truncated)
+            Err(Error)
         } else {
             Ok(())
         }
@@ -446,7 +481,7 @@ impl<T: AsRef<[u8]>> Packet<T> {
 
     /// Return the header length.
     #[inline]
-    pub fn header_len(&self) -> usize {
+    pub const fn header_len(&self) -> usize {
         // This is not a strictly necessary function, but it makes
         // code more readable.
         field::DST_ADDR.end
@@ -603,9 +638,9 @@ impl<T: AsRef<[u8]> + AsMut<[u8]>> Packet<T> {
 impl<'a, T: AsRef<[u8]> + ?Sized> fmt::Display for Packet<&'a T> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match Repr::parse(self) {
-            Ok(repr) => write!(f, "{}", repr),
+            Ok(repr) => write!(f, "{repr}"),
             Err(err) => {
-                write!(f, "IPv6 ({})", err)?;
+                write!(f, "IPv6 ({err})")?;
                 Ok(())
             }
         }
@@ -640,7 +675,7 @@ impl Repr {
         // Ensure basic accessors will work
         packet.check_len()?;
         if packet.version() != 6 {
-            return Err(Error::Malformed);
+            return Err(Error);
         }
         Ok(Repr {
             src_addr: packet.src_addr(),
@@ -652,7 +687,7 @@ impl Repr {
     }
 
     /// Return the length of a header that will be emitted from this high-level representation.
-    pub fn buffer_len(&self) -> usize {
+    pub const fn buffer_len(&self) -> usize {
         // This function is not strictly necessary, but it can make client code more readable.
         field::DST_ADDR.end
     }
@@ -693,11 +728,11 @@ impl<T: AsRef<[u8]>> PrettyPrint for Packet<T> {
         indent: &mut PrettyIndent,
     ) -> fmt::Result {
         let (ip_repr, payload) = match Packet::new_checked(buffer) {
-            Err(err) => return write!(f, "{}({})", indent, err),
+            Err(err) => return write!(f, "{indent}({err})"),
             Ok(ip_packet) => match Repr::parse(&ip_packet) {
                 Err(_) => return Ok(()),
                 Ok(ip_repr) => {
-                    write!(f, "{}{}", indent, ip_repr)?;
+                    write!(f, "{indent}{ip_repr}")?;
                     (ip_repr, ip_packet.payload())
                 }
             },
@@ -709,10 +744,10 @@ impl<T: AsRef<[u8]>> PrettyPrint for Packet<T> {
 
 #[cfg(test)]
 mod test {
+    use super::Error;
     use super::{Address, Cidr};
     use super::{Packet, Protocol, Repr};
     use crate::wire::pretty_print::PrettyPrinter;
-    use crate::Error;
 
     #[cfg(feature = "proto-ipv4")]
     use crate::wire::ipv4::Address as Ipv4Address;
@@ -752,7 +787,7 @@ mod test {
     #[test]
     fn test_address_format() {
         assert_eq!("ff02::1", format!("{}", Address::LINK_LOCAL_ALL_NODES));
-        assert_eq!("fe80::1", format!("{}", LINK_LOCAL_ADDR));
+        assert_eq!("fe80::1", format!("{LINK_LOCAL_ADDR}"));
         assert_eq!(
             "fe80::7f00:0:1",
             format!(
@@ -882,21 +917,28 @@ mod test {
 
     #[test]
     fn test_cidr() {
-        let cidr = Cidr::new(LINK_LOCAL_ADDR, 64);
+        // fe80::1/56
+        // 0xfe, 0x80, 0x00, 0x00, 0x00, 0x00, 0x00,
+        // 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01,
+        let cidr = Cidr::new(LINK_LOCAL_ADDR, 56);
 
         let inside_subnet = [
+            // fe80::2
             [
                 0xfe, 0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
                 0x00, 0x02,
             ],
+            // fe80::1122:3344:5566:7788
             [
                 0xfe, 0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66,
                 0x77, 0x88,
             ],
+            // fe80::ff00:0:0:0
             [
                 0xfe, 0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xff, 0x00, 0x00, 0x00, 0x00, 0x00,
                 0x00, 0x00,
             ],
+            // fe80::ff
             [
                 0xfe, 0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
                 0x00, 0xff,
@@ -904,18 +946,22 @@ mod test {
         ];
 
         let outside_subnet = [
+            // fe80:0:0:101::1
             [
-                0xfe, 0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                0xfe, 0x80, 0x00, 0x00, 0x00, 0x00, 0x01, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
                 0x00, 0x01,
             ],
+            // ::1
             [
                 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
                 0x00, 0x01,
             ],
+            // ff02::1
             [
                 0xff, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
                 0x00, 0x01,
             ],
+            // ff02::2
             [
                 0xff, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
                 0x00, 0x02,
@@ -923,6 +969,7 @@ mod test {
         ];
 
         let subnets = [
+            // fe80::ffff:ffff:ffff:ffff/65
             (
                 [
                     0xfe, 0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xff, 0xff, 0xff, 0xff, 0xff,
@@ -930,6 +977,7 @@ mod test {
                 ],
                 65,
             ),
+            // fe80::1/128
             (
                 [
                     0xfe, 0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
@@ -937,6 +985,7 @@ mod test {
                 ],
                 128,
             ),
+            // fe80::1234:5678/96
             (
                 [
                     0xfe, 0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x12,
@@ -947,27 +996,31 @@ mod test {
         ];
 
         let not_subnets = [
+            // fe80::101:ffff:ffff:ffff:ffff/55
             (
                 [
-                    0xfe, 0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xff, 0xff, 0xff, 0xff, 0xff,
+                    0xfe, 0x80, 0x00, 0x00, 0x00, 0x00, 0x01, 0x01, 0xff, 0xff, 0xff, 0xff, 0xff,
                     0xff, 0xff, 0xff,
                 ],
-                63,
+                55,
             ),
+            // fe80::101:ffff:ffff:ffff:ffff/56
             (
                 [
-                    0xfe, 0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0xff, 0xff, 0xff, 0xff, 0xff,
+                    0xfe, 0x80, 0x00, 0x00, 0x00, 0x00, 0x01, 0x01, 0xff, 0xff, 0xff, 0xff, 0xff,
                     0xff, 0xff, 0xff,
                 ],
-                64,
+                56,
             ),
+            // fe80::101:ffff:ffff:ffff:ffff/57
             (
                 [
-                    0xfe, 0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0xff, 0xff, 0xff, 0xff, 0xff,
+                    0xfe, 0x80, 0x00, 0x00, 0x00, 0x00, 0x01, 0x01, 0xff, 0xff, 0xff, 0xff, 0xff,
                     0xff, 0xff, 0xff,
                 ],
-                65,
+                57,
             ),
+            // ::1/128
             (
                 [
                     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
@@ -1019,7 +1072,7 @@ mod test {
         0x00, 0x01, 0x00, 0x02, 0x00, 0x0c, 0x02, 0x4e, 0xff, 0xff, 0xff, 0xff,
     ];
 
-    fn packet_repr() -> Repr {
+    const fn packet_repr() -> Repr {
         Repr {
             src_addr: Address([
                 0xfe, 0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
@@ -1086,7 +1139,7 @@ mod test {
         let start = expected_bytes.len() - REPR_PAYLOAD_BYTES.len();
         expected_bytes[start..].copy_from_slice(&REPR_PAYLOAD_BYTES[..]);
         assert_eq!(packet.check_len(), Ok(()));
-        assert_eq!(&packet.into_inner()[..], &expected_bytes[..]);
+        assert_eq!(&*packet.into_inner(), &expected_bytes[..]);
     }
 
     #[test]
@@ -1111,7 +1164,7 @@ mod test {
         bytes.extend(&REPR_PACKET_BYTES[..]);
         Packet::new_unchecked(&mut bytes).set_payload_len(0x80);
 
-        assert_eq!(Packet::new_checked(&bytes).unwrap_err(), Error::Truncated);
+        assert_eq!(Packet::new_checked(&bytes).unwrap_err(), Error);
     }
 
     #[test]
@@ -1128,7 +1181,7 @@ mod test {
         packet.set_version(4);
         packet.set_payload_len(0);
         let packet = Packet::new_unchecked(&*packet.into_inner());
-        assert_eq!(Repr::parse(&packet), Err(Error::Malformed));
+        assert_eq!(Repr::parse(&packet), Err(Error));
     }
 
     #[test]
@@ -1138,7 +1191,7 @@ mod test {
         packet.set_version(6);
         packet.set_payload_len(39);
         let packet = Packet::new_unchecked(&*packet.into_inner());
-        assert_eq!(Repr::parse(&packet), Err(Error::Truncated));
+        assert_eq!(Repr::parse(&packet), Err(Error));
     }
 
     #[test]
@@ -1148,7 +1201,7 @@ mod test {
         packet.set_version(6);
         packet.set_payload_len(1);
         let packet = Packet::new_unchecked(&*packet.into_inner());
-        assert_eq!(Repr::parse(&packet), Err(Error::Truncated));
+        assert_eq!(Repr::parse(&packet), Err(Error));
     }
 
     #[test]
@@ -1158,7 +1211,7 @@ mod test {
         let mut packet = Packet::new_unchecked(&mut bytes);
         repr.emit(&mut packet);
         packet.payload_mut().copy_from_slice(&REPR_PAYLOAD_BYTES);
-        assert_eq!(&packet.into_inner()[..], &REPR_PACKET_BYTES[..]);
+        assert_eq!(&*packet.into_inner(), &REPR_PACKET_BYTES[..]);
     }
 
     #[test]

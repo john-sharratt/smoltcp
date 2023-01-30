@@ -6,7 +6,6 @@ use std::io::Write;
 
 use crate::phy::{self, Device, DeviceCapabilities};
 use crate::time::Instant;
-use crate::Result;
 
 enum_with_unknown! {
     /// Captured packet header type.
@@ -118,7 +117,7 @@ impl<T: Write> PcapSink for T {
 #[derive(Debug)]
 pub struct PcapWriter<D, S>
 where
-    D: for<'a> Device<'a>,
+    D: Device,
     S: PcapSink,
 {
     lower: D,
@@ -126,7 +125,7 @@ where
     mode: PcapMode,
 }
 
-impl<D: for<'a> Device<'a>, S: PcapSink> PcapWriter<D, S> {
+impl<D: Device, S: PcapSink> PcapWriter<D, S> {
     /// Creates a packet capture writer.
     pub fn new(lower: D, mut sink: S, mode: PcapMode) -> PcapWriter<D, S> {
         let medium = lower.capabilities().medium;
@@ -162,42 +161,52 @@ impl<D: for<'a> Device<'a>, S: PcapSink> PcapWriter<D, S> {
     }
 }
 
-impl<'a, D, S> Device<'a> for PcapWriter<D, S>
+impl<D: Device, S> Device for PcapWriter<D, S>
 where
-    D: for<'b> Device<'b>,
-    S: PcapSink + 'a,
+    S: PcapSink,
 {
-    type RxToken = RxToken<'a, <D as Device<'a>>::RxToken, S>;
-    type TxToken = TxToken<'a, <D as Device<'a>>::TxToken, S>;
+    type RxToken<'a> = RxToken<'a, D::RxToken<'a>, S>
+    where
+        Self: 'a;
+    type TxToken<'a> = TxToken<'a, D::TxToken<'a>, S>
+    where
+        Self: 'a;
 
     fn capabilities(&self) -> DeviceCapabilities {
         self.lower.capabilities()
     }
 
-    fn receive(&'a mut self) -> Option<(Self::RxToken, Self::TxToken)> {
-        let sink = &self.sink;
-        let mode = self.mode;
-        self.lower.receive().map(move |(rx_token, tx_token)| {
-            let rx = RxToken {
-                token: rx_token,
-                sink,
-                mode,
-            };
-            let tx = TxToken {
-                token: tx_token,
-                sink,
-                mode,
-            };
-            (rx, tx)
-        })
-    }
-
-    fn transmit(&'a mut self) -> Option<Self::TxToken> {
+    fn receive(&mut self, timestamp: Instant) -> Option<(Self::RxToken<'_>, Self::TxToken<'_>)> {
         let sink = &self.sink;
         let mode = self.mode;
         self.lower
-            .transmit()
-            .map(move |token| TxToken { token, sink, mode })
+            .receive(timestamp)
+            .map(move |(rx_token, tx_token)| {
+                let rx = RxToken {
+                    token: rx_token,
+                    sink,
+                    mode,
+                    timestamp,
+                };
+                let tx = TxToken {
+                    token: tx_token,
+                    sink,
+                    mode,
+                    timestamp,
+                };
+                (rx, tx)
+            })
+    }
+
+    fn transmit(&mut self, timestamp: Instant) -> Option<Self::TxToken<'_>> {
+        let sink = &self.sink;
+        let mode = self.mode;
+        self.lower.transmit(timestamp).map(move |token| TxToken {
+            token,
+            sink,
+            mode,
+            timestamp,
+        })
     }
 }
 
@@ -206,16 +215,17 @@ pub struct RxToken<'a, Rx: phy::RxToken, S: PcapSink> {
     token: Rx,
     sink: &'a RefCell<S>,
     mode: PcapMode,
+    timestamp: Instant,
 }
 
 impl<'a, Rx: phy::RxToken, S: PcapSink> phy::RxToken for RxToken<'a, Rx, S> {
-    fn consume<R, F: FnOnce(&mut [u8]) -> Result<R>>(self, timestamp: Instant, f: F) -> Result<R> {
-        let Self { token, sink, mode } = self;
-        token.consume(timestamp, |buffer| {
-            match mode {
-                PcapMode::Both | PcapMode::RxOnly => {
-                    sink.borrow_mut().packet(timestamp, buffer.as_ref())
-                }
+    fn consume<R, F: FnOnce(&mut [u8]) -> R>(self, f: F) -> R {
+        self.token.consume(|buffer| {
+            match self.mode {
+                PcapMode::Both | PcapMode::RxOnly => self
+                    .sink
+                    .borrow_mut()
+                    .packet(self.timestamp, buffer.as_ref()),
                 PcapMode::TxOnly => (),
             }
             f(buffer)
@@ -228,18 +238,20 @@ pub struct TxToken<'a, Tx: phy::TxToken, S: PcapSink> {
     token: Tx,
     sink: &'a RefCell<S>,
     mode: PcapMode,
+    timestamp: Instant,
 }
 
 impl<'a, Tx: phy::TxToken, S: PcapSink> phy::TxToken for TxToken<'a, Tx, S> {
-    fn consume<R, F>(self, timestamp: Instant, len: usize, f: F) -> Result<R>
+    fn consume<R, F>(self, len: usize, f: F) -> R
     where
-        F: FnOnce(&mut [u8]) -> Result<R>,
+        F: FnOnce(&mut [u8]) -> R,
     {
-        let Self { token, sink, mode } = self;
-        token.consume(timestamp, len, |buffer| {
+        self.token.consume(len, |buffer| {
             let result = f(buffer);
-            match mode {
-                PcapMode::Both | PcapMode::TxOnly => sink.borrow_mut().packet(timestamp, buffer),
+            match self.mode {
+                PcapMode::Both | PcapMode::TxOnly => {
+                    self.sink.borrow_mut().packet(self.timestamp, buffer)
+                }
                 PcapMode::RxOnly => (),
             };
             result

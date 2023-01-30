@@ -1,17 +1,13 @@
-#[cfg(not(feature = "rust-1_28"))]
 use alloc::collections::VecDeque;
 use alloc::vec::Vec;
-#[cfg(feature = "rust-1_28")]
-use alloc::VecDeque;
 
 use crate::phy::{self, Device, DeviceCapabilities, Medium};
 use crate::time::Instant;
-use crate::Result;
 
 /// A loopback device.
 #[derive(Debug)]
 pub struct Loopback {
-    queue: VecDeque<Vec<u8>>,
+    pub(crate) queue: VecDeque<Vec<u8>>,
     medium: Medium,
 }
 
@@ -29,9 +25,9 @@ impl Loopback {
     }
 }
 
-impl<'a> Device<'a> for Loopback {
-    type RxToken = RxToken;
-    type TxToken = TxToken<'a>;
+impl Device for Loopback {
+    type RxToken<'a> = RxToken;
+    type TxToken<'a> = TxToken<'a>;
 
     fn capabilities(&self) -> DeviceCapabilities {
         DeviceCapabilities {
@@ -41,7 +37,7 @@ impl<'a> Device<'a> for Loopback {
         }
     }
 
-    fn receive(&'a mut self) -> Option<(Self::RxToken, Self::TxToken)> {
+    fn receive(&mut self, _timestamp: Instant) -> Option<(Self::RxToken<'_>, Self::TxToken<'_>)> {
         self.queue.pop_front().map(move |buffer| {
             let rx = RxToken { buffer };
             let tx = TxToken {
@@ -51,7 +47,7 @@ impl<'a> Device<'a> for Loopback {
         })
     }
 
-    fn transmit(&'a mut self) -> Option<Self::TxToken> {
+    fn transmit(&mut self, _timestamp: Instant) -> Option<Self::TxToken<'_>> {
         Some(TxToken {
             queue: &mut self.queue,
         })
@@ -64,23 +60,24 @@ pub struct RxToken {
 }
 
 impl phy::RxToken for RxToken {
-    fn consume<R, F>(mut self, _timestamp: Instant, f: F) -> Result<R>
+    fn consume<R, F>(mut self, f: F) -> R
     where
-        F: FnOnce(&mut [u8]) -> Result<R>,
+        F: FnOnce(&mut [u8]) -> R,
     {
         f(&mut self.buffer)
     }
 }
 
 #[doc(hidden)]
+#[derive(Debug)]
 pub struct TxToken<'a> {
     queue: &'a mut VecDeque<Vec<u8>>,
 }
 
 impl<'a> phy::TxToken for TxToken<'a> {
-    fn consume<R, F>(self, _timestamp: Instant, len: usize, f: F) -> Result<R>
+    fn consume<R, F>(self, len: usize, f: F) -> R
     where
-        F: FnOnce(&mut [u8]) -> Result<R>,
+        F: FnOnce(&mut [u8]) -> R,
     {
         let mut buffer = Vec::new();
         buffer.resize(len, 0);
