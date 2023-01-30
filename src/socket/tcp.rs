@@ -506,6 +506,23 @@ impl<'a> Socket<'a> {
         self.rx_waker.register(waker)
     }
 
+    /// Swaps the waker for receive operations.
+    ///
+    /// The waker is woken on state changes that might affect the return value
+    /// of `recv` method calls, such as receiving data, or the socket closing.
+    ///
+    /// Notes:
+    ///
+    /// - Only one waker can be registered at a time. If another waker was previously registered,
+    ///   it is overwritten and will no longer be woken.
+    /// - The Waker is woken only once. Once woken, you must register it again to receive more wakes.
+    /// - "Spurious wakes" are allowed: a wake doesn't guarantee the result of `recv` has
+    ///   necessarily changed.
+    #[cfg(feature = "async")]
+    pub fn swap_recv_waker(&mut self, waker: Waker) -> Option<Waker> {
+        self.rx_waker.swap(waker)
+    }
+
     /// Register a waker for send operations.
     ///
     /// The waker is woken on state changes that might affect the return value
