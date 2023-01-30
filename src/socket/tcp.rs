@@ -1830,7 +1830,7 @@ impl<'a> TcpSocket<'a> {
         // Try adding payload octets to the assembler.
         match self.assembler.add(payload_offset, payload_len) {
             Ok(_) => {
-                debug_assert!(self.assembler.total_size() == self.rx_buffer.capacity());
+                debug_assert_eq!(self.assembler.total_size(), self.rx_buffer.capacity());
                 // Place payload octets into the buffer.
                 net_trace!(
                     "tcp:{}:{}: rx buffer: receiving {} octets at offset {}",
@@ -1842,7 +1842,7 @@ impl<'a> TcpSocket<'a> {
                 let len_written = self
                     .rx_buffer
                     .write_unallocated(payload_offset, repr.payload);
-                debug_assert!(len_written == payload_len);
+                debug_assert_eq!(len_written, payload_len);
             }
             Err(crate::storage::AssemblerError::TooManyHolesError) => {
                 net_debug!(
