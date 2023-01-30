@@ -524,6 +524,24 @@ impl<'a> Socket<'a> {
         self.tx_waker.register(waker)
     }
 
+    /// Swaps a waker for send operations with another waker.
+    ///
+    /// The waker is woken on state changes that might affect the return value
+    /// of `send` method calls, such as space becoming available in the transmit
+    /// buffer, or the socket closing.
+    ///
+    /// Notes:
+    ///
+    /// - Only one waker can be registered at a time. If another waker was previously registered,
+    ///   it is overwritten and will no longer be woken.
+    /// - The Waker is woken only once. Once woken, you must register it again to receive more wakes.
+    /// - "Spurious wakes" are allowed: a wake doesn't guarantee the result of `send` has
+    ///   necessarily changed.
+    #[cfg(feature = "async")]
+    pub fn swap_send_waker(&mut self, waker: Waker) -> Option<Waker> {
+        self.tx_waker.swap(waker)
+    }
+
     /// Return the timeout duration.
     ///
     /// See also the [set_timeout](#method.set_timeout) method.

@@ -26,6 +26,11 @@ impl WakerRegistration {
         }
     }
 
+    /// Swaps this waker for another waker
+    pub fn swap(&mut self, w: Waker) -> Option<Waker> {
+        self.waker.replace(w)
+    }
+
     /// Wake the registered waker, if any.
     pub fn wake(&mut self) {
         self.waker.take().map(|w| w.wake());
