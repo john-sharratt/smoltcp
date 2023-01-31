@@ -427,6 +427,8 @@ pub struct Socket<'a> {
     rx_waker: WakerRegistration,
     #[cfg(feature = "async")]
     tx_waker: WakerRegistration,
+    #[cfg(feature = "async")]
+    state_waker: WakerRegistration,
 }
 
 const DEFAULT_MSS: usize = 536;
@@ -486,6 +488,8 @@ impl<'a> Socket<'a> {
             rx_waker: WakerRegistration::new(),
             #[cfg(feature = "async")]
             tx_waker: WakerRegistration::new(),
+            #[cfg(feature = "async")]
+            state_waker: WakerRegistration::new(),
         }
     }
 
@@ -557,6 +561,38 @@ impl<'a> Socket<'a> {
     #[cfg(feature = "async")]
     pub fn swap_send_waker(&mut self, waker: Waker) -> Option<Waker> {
         self.tx_waker.swap(waker)
+    }
+
+    /// Register a waker for state changes of the connection.
+    ///
+    /// The waker is woken on state changes that might affect the status of the connection
+    ///
+    /// Notes:
+    ///
+    /// - Only one waker can be registered at a time. If another waker was previously registered,
+    ///   it is overwritten and will no longer be woken.
+    /// - The Waker is woken only once. Once woken, you must register it again to receive more wakes.
+    /// - "Spurious wakes" are allowed: a wake doesn't guarantee the result of `recv` has
+    ///   necessarily changed.
+    #[cfg(feature = "async")]
+    pub fn register_state_waker(&mut self, waker: &Waker) {
+        self.state_waker.register(waker)
+    }
+
+    /// Swaps the waker for receive operations.
+    ///
+    /// The waker is woken on state changes that might affect the status of the connection
+    ///
+    /// Notes:
+    ///
+    /// - Only one waker can be registered at a time. If another waker was previously registered,
+    ///   it is overwritten and will no longer be woken.
+    /// - The Waker is woken only once. Once woken, you must register it again to receive more wakes.
+    /// - "Spurious wakes" are allowed: a wake doesn't guarantee the result of `recv` has
+    ///   necessarily changed.
+    #[cfg(feature = "async")]
+    pub fn swap_state_waker(&mut self, waker: Waker) -> Option<Waker> {
+        self.state_waker.swap(waker)
     }
 
     /// Return the timeout duration.
@@ -733,6 +769,7 @@ impl<'a> Socket<'a> {
         {
             self.rx_waker.wake();
             self.tx_waker.wake();
+            self.state_waker.wake();
         }
     }
 
@@ -1203,6 +1240,7 @@ impl<'a> Socket<'a> {
             // For example, a pending read has to fail with an error if the socket is closed.
             self.rx_waker.wake();
             self.tx_waker.wake();
+            self.state_waker.wake();
         }
     }
 
