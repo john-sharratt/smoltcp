@@ -5,6 +5,12 @@ use core::task::Waker;
 pub struct WakerRegistration {
     waker: Option<Waker>,
 }
+impl Drop
+for WakerRegistration {
+    fn drop(&mut self) {
+        self.wake()
+    }
+}
 
 impl WakerRegistration {
     pub const fn new() -> Self {
