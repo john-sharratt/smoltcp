@@ -65,7 +65,7 @@ impl DnsQuery {
     fn set_state(&mut self, state: State) {
         self.state = state;
         #[cfg(feature = "async")]
-        self.waker.wake();
+        self.waker.wake_all();
     }
 }
 
@@ -338,6 +338,22 @@ impl<'a> Socket<'a> {
             .unwrap()
             .waker
             .register(waker);
+    }
+
+    /// Adds another waker to a query slot
+    ///
+    /// The waker will be woken when the query completes, either successfully or failed.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the QueryHandle corresponds to an already free slot.
+    #[cfg(feature = "async")]
+    pub fn add_query_waker(&mut self, handle: QueryHandle, waker: &Waker) {
+        self.queries[handle.0]
+            .as_mut()
+            .unwrap()
+            .waker
+            .add(waker);
     }
 
     pub(crate) fn accepts(&self, ip_repr: &IpRepr, udp_repr: &UdpRepr) -> bool {

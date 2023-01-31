@@ -510,21 +510,19 @@ impl<'a> Socket<'a> {
         self.rx_waker.register(waker)
     }
 
-    /// Swaps the waker for receive operations.
+    /// Adds another waker for receive operations.
     ///
     /// The waker is woken on state changes that might affect the return value
     /// of `recv` method calls, such as receiving data, or the socket closing.
     ///
     /// Notes:
     ///
-    /// - Only one waker can be registered at a time. If another waker was previously registered,
-    ///   it is overwritten and will no longer be woken.
     /// - The Waker is woken only once. Once woken, you must register it again to receive more wakes.
     /// - "Spurious wakes" are allowed: a wake doesn't guarantee the result of `recv` has
     ///   necessarily changed.
     #[cfg(feature = "async")]
-    pub fn swap_recv_waker(&mut self, waker: Waker) -> Option<Waker> {
-        self.rx_waker.swap(waker)
+    pub fn add_recv_waker(&mut self, waker: &Waker) {
+        self.rx_waker.add(waker)
     }
 
     /// Register a waker for send operations.
@@ -545,7 +543,7 @@ impl<'a> Socket<'a> {
         self.tx_waker.register(waker)
     }
 
-    /// Swaps a waker for send operations with another waker.
+    /// Adds another waker for send operations.
     ///
     /// The waker is woken on state changes that might affect the return value
     /// of `send` method calls, such as space becoming available in the transmit
@@ -553,14 +551,12 @@ impl<'a> Socket<'a> {
     ///
     /// Notes:
     ///
-    /// - Only one waker can be registered at a time. If another waker was previously registered,
-    ///   it is overwritten and will no longer be woken.
     /// - The Waker is woken only once. Once woken, you must register it again to receive more wakes.
     /// - "Spurious wakes" are allowed: a wake doesn't guarantee the result of `send` has
     ///   necessarily changed.
     #[cfg(feature = "async")]
-    pub fn swap_send_waker(&mut self, waker: Waker) -> Option<Waker> {
-        self.tx_waker.swap(waker)
+    pub fn add_send_waker(&mut self, waker: &Waker) {
+        self.tx_waker.add(waker)
     }
 
     /// Register a waker for state changes of the connection.
@@ -572,27 +568,25 @@ impl<'a> Socket<'a> {
     /// - Only one waker can be registered at a time. If another waker was previously registered,
     ///   it is overwritten and will no longer be woken.
     /// - The Waker is woken only once. Once woken, you must register it again to receive more wakes.
-    /// - "Spurious wakes" are allowed: a wake doesn't guarantee the result of `recv` has
+    /// - "Spurious wakes" are allowed: a wake doesn't guarantee the result of `state` has
     ///   necessarily changed.
     #[cfg(feature = "async")]
     pub fn register_state_waker(&mut self, waker: &Waker) {
         self.state_waker.register(waker)
     }
 
-    /// Swaps the waker for receive operations.
+    /// Adds another waker for state changes of the connection.
     ///
     /// The waker is woken on state changes that might affect the status of the connection
     ///
     /// Notes:
     ///
-    /// - Only one waker can be registered at a time. If another waker was previously registered,
-    ///   it is overwritten and will no longer be woken.
     /// - The Waker is woken only once. Once woken, you must register it again to receive more wakes.
-    /// - "Spurious wakes" are allowed: a wake doesn't guarantee the result of `recv` has
+    /// - "Spurious wakes" are allowed: a wake doesn't guarantee the result of `state` has
     ///   necessarily changed.
     #[cfg(feature = "async")]
-    pub fn swap_state_waker(&mut self, waker: Waker) -> Option<Waker> {
-        self.state_waker.swap(waker)
+    pub fn add_state_waker(&mut self, waker: &Waker) {
+        self.state_waker.add(waker)
     }
 
     /// Return the timeout duration.
@@ -767,9 +761,9 @@ impl<'a> Socket<'a> {
 
         #[cfg(feature = "async")]
         {
-            self.rx_waker.wake();
-            self.tx_waker.wake();
-            self.state_waker.wake();
+            self.rx_waker.wake_all();
+            self.tx_waker.wake_all();
+            self.state_waker.wake_all();
         }
     }
 
@@ -1238,9 +1232,9 @@ impl<'a> Socket<'a> {
             // Wake all tasks waiting. Even if we haven't received/sent data, this
             // is needed because return values of functions may change depending on the state.
             // For example, a pending read has to fail with an error if the socket is closed.
-            self.rx_waker.wake();
-            self.tx_waker.wake();
-            self.state_waker.wake();
+            self.rx_waker.wake_all();
+            self.tx_waker.wake_all();
+            self.state_waker.wake_all();
         }
     }
 
@@ -1792,7 +1786,7 @@ impl<'a> Socket<'a> {
 
             // There's new room available in tx_buffer, wake the waiting task if any.
             #[cfg(feature = "async")]
-            self.tx_waker.wake();
+            self.tx_waker.wake_one();
         }
 
         if let Some(ack_number) = repr.ack_number {
@@ -1892,7 +1886,7 @@ impl<'a> Socket<'a> {
 
             // There's new data in rx_buffer, notify waiting task if any.
             #[cfg(feature = "async")]
-            self.rx_waker.wake();
+            self.rx_waker.wake_one();
         }
 
         if !self.assembler.is_empty() {

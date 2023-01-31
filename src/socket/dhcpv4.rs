@@ -689,7 +689,7 @@ impl<'a> Socket<'a> {
     pub(crate) fn config_changed(&mut self) {
         self.config_changed = true;
         #[cfg(feature = "async")]
-        self.waker.wake();
+        self.waker.wake_all();
     }
 
     /// Register a waker.
@@ -706,6 +706,20 @@ impl<'a> Socket<'a> {
     #[cfg(feature = "async")]
     pub fn register_waker(&mut self, waker: &Waker) {
         self.waker.register(waker)
+    }
+
+    /// Adds another waker.
+    ///
+    /// The waker is woken on state changes that might affect the return value
+    /// of `poll` method calls, which indicates a new state in the DHCP configuration
+    /// provided by this DHCP socket.
+    ///
+    /// Notes:
+    ///
+    /// - The Waker is woken only once. Once woken, you must register it again to receive more wakes.
+    #[cfg(feature = "async")]
+    pub fn add_waker(&mut self, waker: &Waker) {
+        self.waker.add(waker)
     }
 }
 

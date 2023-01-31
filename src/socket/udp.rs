@@ -53,6 +53,8 @@ pub struct Socket<'a> {
     rx_waker: WakerRegistration,
     #[cfg(feature = "async")]
     tx_waker: WakerRegistration,
+    #[cfg(feature = "async")]
+    state_waker: WakerRegistration,
 }
 
 impl<'a> Socket<'a> {
@@ -67,6 +69,8 @@ impl<'a> Socket<'a> {
             rx_waker: WakerRegistration::new(),
             #[cfg(feature = "async")]
             tx_waker: WakerRegistration::new(),
+            #[cfg(feature = "async")]
+            state_waker: WakerRegistration::new(),
         }
     }
 
@@ -87,6 +91,21 @@ impl<'a> Socket<'a> {
         self.rx_waker.register(waker)
     }
 
+    /// Adds another waker for receive operations.
+    ///
+    /// The waker is woken on state changes that might affect the return value
+    /// of `recv` method calls, such as receiving data, or the socket closing.
+    ///
+    /// Notes:
+    ///
+    /// - The Waker is woken only once. Once woken, you must register it again to receive more wakes.
+    /// - "Spurious wakes" are allowed: a wake doesn't guarantee the result of `recv` has
+    ///   necessarily changed.
+    #[cfg(feature = "async")]
+    pub fn add_recv_waker(&mut self, waker: &Waker) {
+        self.rx_waker.add(waker)
+    }
+
     /// Register a waker for send operations.
     ///
     /// The waker is woken on state changes that might affect the return value
@@ -103,6 +122,52 @@ impl<'a> Socket<'a> {
     #[cfg(feature = "async")]
     pub fn register_send_waker(&mut self, waker: &Waker) {
         self.tx_waker.register(waker)
+    }
+
+    /// Adds another waker for send operations.
+    ///
+    /// The waker is woken on state changes that might affect the return value
+    /// of `send` method calls, such as space becoming available in the transmit
+    /// buffer, or the socket closing.
+    ///
+    /// Notes:
+    ///
+    /// - The Waker is woken only once. Once woken, you must register it again to receive more wakes.
+    /// - "Spurious wakes" are allowed: a wake doesn't guarantee the result of `send` has
+    ///   necessarily changed.
+    #[cfg(feature = "async")]
+    pub fn add_send_waker(&mut self, waker: &Waker) {
+        self.tx_waker.add(waker)
+    }
+
+    /// Register a waker for state change.
+    ///
+    /// The waker is woken on state changes.
+    ///
+    /// Notes:
+    ///
+    /// - Only one waker can be registered at a time. If another waker was previously registered,
+    ///   it is overwritten and will no longer be woken.
+    /// - The Waker is woken only once. Once woken, you must register it again to receive more wakes.
+    /// - "Spurious wakes" are allowed: a wake doesn't guarantee the result of `send` has
+    ///   necessarily changed.
+    #[cfg(feature = "async")]
+    pub fn register_state_waker(&mut self, waker: &Waker) {
+        self.state_waker.register(waker)
+    }
+
+    /// Adds another waker for state change.
+    ///
+    /// The waker is woken on state changes.
+    ///
+    /// Notes:
+    ///
+    /// - The Waker is woken only once. Once woken, you must register it again to receive more wakes.
+    /// - "Spurious wakes" are allowed: a wake doesn't guarantee the result of `send` has
+    ///   necessarily changed.
+    #[cfg(feature = "async")]
+    pub fn add_state_waker(&mut self, waker: &Waker) {
+        self.state_waker.add(waker)
     }
 
     /// Return the bound endpoint.
@@ -157,8 +222,9 @@ impl<'a> Socket<'a> {
 
         #[cfg(feature = "async")]
         {
-            self.rx_waker.wake();
-            self.tx_waker.wake();
+            self.rx_waker.wake_all();
+            self.tx_waker.wake_all();
+            self.state_waker.wake_all();
         }
 
         Ok(())
@@ -175,8 +241,9 @@ impl<'a> Socket<'a> {
 
         #[cfg(feature = "async")]
         {
-            self.rx_waker.wake();
-            self.tx_waker.wake();
+            self.rx_waker.wake_all();
+            self.tx_waker.wake_all();
+            self.state_waker.wake_all();
         }
     }
 
@@ -418,7 +485,7 @@ impl<'a> Socket<'a> {
         }
 
         #[cfg(feature = "async")]
-        self.rx_waker.wake();
+        self.rx_waker.wake_one();
     }
 
     pub(crate) fn dispatch<F, E>(&mut self, cx: &mut Context, emit: F) -> Result<(), E>
@@ -469,7 +536,7 @@ impl<'a> Socket<'a> {
             Ok(Err(e)) => Err(e),
             Ok(Ok(())) => {
                 #[cfg(feature = "async")]
-                self.tx_waker.wake();
+                self.tx_waker.wake_one();
                 Ok(())
             }
         }
