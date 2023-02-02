@@ -1511,8 +1511,8 @@ impl InterfaceInner {
             None
         } else {
             // The packet wasn't handled by a socket, send a TCP RST packet.
-            net_debug!(
-                "packet wasn't handled by a socket, send a TCP RST packet. ({}->{})",
+            net_trace!(
+                "packet wasn't handled by a socket, sending a TCP RST packet. (src_addr={}, dst_addr={})",
                 src_addr,
                 dst_addr
             );
