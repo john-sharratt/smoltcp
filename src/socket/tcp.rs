@@ -715,6 +715,12 @@ impl<'a> Socket<'a> {
         self.hop_limit = hop_limit
     }
 
+    /// Return the listening endpoint
+    #[inline]
+    pub fn listen_endpoint(&self) -> IpListenEndpoint {
+        self.listen_endpoint
+    }
+
     /// Return the local endpoint, or None if not connected.
     #[inline]
     pub fn local_endpoint(&self) -> Option<IpEndpoint> {
@@ -1372,7 +1378,7 @@ impl<'a> Socket<'a> {
         } else {
             // We're listening, reject packets not matching the listen endpoint.
             let addr_ok = match self.listen_endpoint.addr {
-                Some(addr) => ip_repr.dst_addr() == addr,
+                Some(addr) => ip_repr.dst_addr() == addr || addr.is_unspecified(),
                 None => true,
             };
             addr_ok && repr.dst_port != 0 && repr.dst_port == self.listen_endpoint.port
