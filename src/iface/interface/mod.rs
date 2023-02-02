@@ -1511,6 +1511,11 @@ impl InterfaceInner {
             None
         } else {
             // The packet wasn't handled by a socket, send a TCP RST packet.
+            net_debug!(
+                "packet wasn't handled by a socket, send a TCP RST packet. ({}->{})",
+                src_addr,
+                dst_addr
+            );
             Some(IpPacket::Tcp(tcp::Socket::rst_reply(&ip_repr, &tcp_repr)))
         }
     }
