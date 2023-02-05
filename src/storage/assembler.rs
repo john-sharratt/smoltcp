@@ -336,7 +336,10 @@ impl<'a> Iterator for AssemblerIter<'a> {
             self.left += contig.hole_size;
             self.right = self.left + contig.data_size;
             data_range = if self.left < self.right {
-                let data_range = (self.left.checked_add(self.offset)?, self.right.checked_add(self.offset)?);
+                let data_range = (
+                    self.left.checked_add(self.offset)?,
+                    self.right.checked_add(self.offset)?,
+                );
                 self.left = self.right;
                 Some(data_range)
             } else {

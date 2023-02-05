@@ -1792,7 +1792,7 @@ impl<'a> Socket<'a> {
 
             // There's new room available in tx_buffer, wake the waiting task if any.
             #[cfg(feature = "async")]
-            self.tx_waker.wake_one();
+            self.tx_waker.wake_all();
         }
 
         if let Some(ack_number) = repr.ack_number {
@@ -1892,7 +1892,7 @@ impl<'a> Socket<'a> {
 
             // There's new data in rx_buffer, notify waiting task if any.
             #[cfg(feature = "async")]
-            self.rx_waker.wake_one();
+            self.rx_waker.wake_all();
         }
 
         if !self.assembler.is_empty() {

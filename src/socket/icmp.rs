@@ -534,7 +534,7 @@ impl<'a> Socket<'a> {
         }
 
         #[cfg(feature = "async")]
-        self.rx_waker.wake_one();
+        self.rx_waker.wake_all();
     }
 
     pub(crate) fn dispatch<F, E>(&mut self, cx: &mut Context, emit: F) -> Result<(), E>
@@ -625,7 +625,7 @@ impl<'a> Socket<'a> {
             Ok(Err(e)) => Err(e),
             Ok(Ok(())) => {
                 #[cfg(feature = "async")]
-                self.tx_waker.wake_one();
+                self.tx_waker.wake_all();
                 Ok(())
             }
         }

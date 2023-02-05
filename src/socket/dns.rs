@@ -349,11 +349,7 @@ impl<'a> Socket<'a> {
     /// Panics if the QueryHandle corresponds to an already free slot.
     #[cfg(feature = "async")]
     pub fn add_query_waker(&mut self, handle: QueryHandle, waker: &Waker) {
-        self.queries[handle.0]
-            .as_mut()
-            .unwrap()
-            .waker
-            .add(waker);
+        self.queries[handle.0].as_mut().unwrap().waker.add(waker);
     }
 
     pub(crate) fn accepts(&self, ip_repr: &IpRepr, udp_repr: &UdpRepr) -> bool {

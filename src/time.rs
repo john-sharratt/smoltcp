@@ -116,16 +116,15 @@ impl Into<::std::time::Instant> for Instant {
     fn into(self) -> ::std::time::Instant {
         let elapsed = self.total_micros() as u64;
         let now = ::std::time::Instant::now();
-        now.checked_sub(std::time::Duration::from_micros(elapsed)).unwrap_or(now)
+        now.checked_sub(std::time::Duration::from_micros(elapsed))
+            .unwrap_or(now)
     }
 }
 
 impl From<::std::sync::atomic::AtomicI64> for Instant {
     fn from(other: ::std::sync::atomic::AtomicI64) -> Self {
         let elapsed = other.load(::std::sync::atomic::Ordering::Acquire);
-        Self {
-            micros: elapsed
-        }
+        Self { micros: elapsed }
     }
 }
 

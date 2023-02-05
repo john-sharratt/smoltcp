@@ -12,8 +12,7 @@ struct WakerNext {
 pub struct WakerRegistration {
     waker: Option<WakerNext>,
 }
-impl Drop
-for WakerRegistration {
+impl Drop for WakerRegistration {
     fn drop(&mut self) {
         self.wake_all()
     }
@@ -35,10 +34,12 @@ impl WakerRegistration {
             // - we have no waker registered
             // - we have a waker registered but it's for a different task.
             // then clone the new waker and store it
-            _ => self.waker = Some(WakerNext {
-                waker: w.clone(),
-                next: None
-            }),
+            _ => {
+                self.waker = Some(WakerNext {
+                    waker: w.clone(),
+                    next: None,
+                })
+            }
         }
     }
 
@@ -52,12 +53,10 @@ impl WakerRegistration {
                     waker = match waker {
                         Some(w2) => &mut w2.next,
                         None => {
-                            waker.replace(Box::new(
-                                WakerNext {
-                                    waker: w.clone(),
-                                    next: None
-                                }
-                            ));
+                            waker.replace(Box::new(WakerNext {
+                                waker: w.clone(),
+                                next: None,
+                            }));
                             return;
                         }
                     }
