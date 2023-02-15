@@ -1,7 +1,6 @@
 // Heads up! Before working on this file you should read the parts
 // of RFC 1122 that discuss Ethernet, ARP and IP for any IPv4 work
 // and RFCs 8200 and 4861 for any IPv6 and NDISC work.
-
 #[cfg(test)]
 mod tests;
 
@@ -1821,6 +1820,7 @@ impl InterfaceInner {
 
         match ip_repr {
             #[cfg(feature = "proto-ipv4")]
+            #[allow(unused_variables)]
             IpRepr::Ipv4(ref mut repr) => {
                 // If we have an IPv4 packet, then we need to check if we need to fragment it.
                 if total_ip_len > self.caps.max_transmission_unit {

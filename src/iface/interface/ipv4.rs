@@ -1,3 +1,4 @@
+#![allow(unused_imports)]
 use super::check;
 use super::icmp_reply_payload_len;
 use super::InterfaceInner;

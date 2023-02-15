@@ -66,6 +66,7 @@ impl WakerRegistration {
     }
 
     /// Wake one registered waker, if any.
+    #[allow(dead_code)]
     pub fn wake_one(&mut self) {
         self.waker.take().map(|w| {
             w.waker.wake();

@@ -3,6 +3,7 @@
 macro_rules! net_log {
     (trace, $($arg:expr),*) => { log::trace!($($arg),*) };
     (debug, $($arg:expr),*) => { log::debug!($($arg),*) };
+    (warn, $($arg:expr),*) => { log::warn!($($arg),*) };
 }
 
 #[cfg(test)]
@@ -10,12 +11,14 @@ macro_rules! net_log {
 macro_rules! net_log {
     (trace, $($arg:expr),*) => { println!($($arg),*) };
     (debug, $($arg:expr),*) => { println!($($arg),*) };
+    (warn, $($arg:expr),*) => { println!($($arg),*) };
 }
 
 #[cfg(feature = "defmt")]
 macro_rules! net_log {
     (trace, $($arg:expr),*) => { defmt::trace!($($arg),*) };
     (debug, $($arg:expr),*) => { defmt::debug!($($arg),*) };
+    (warn, $($arg:expr),*) => { defmt::warn!($($arg),*) };
 }
 
 #[cfg(not(any(feature = "log", feature = "defmt")))]
@@ -29,6 +32,11 @@ macro_rules! net_trace {
 
 macro_rules! net_debug {
     ($($arg:expr),*) => (net_log!(debug, $($arg),*));
+}
+
+#[allow(unused_macros)]
+macro_rules! net_warn {
+    ($($arg:expr),*) => (net_log!(warn, $($arg),*));
 }
 
 macro_rules! enum_with_unknown {
