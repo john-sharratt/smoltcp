@@ -183,6 +183,23 @@ impl<'a> Socket<'a> {
         self.tx_waker.add(waker)
     }
 
+    /// Determines if the wakers will be cleared
+    /// when they are triggerd (this is the default behavior)
+    #[cfg(feature = "async")]
+    pub fn set_clear_on_wake(&mut self, clear_on_wake: bool) {
+        self.rx_waker.set_clear_on_wake(clear_on_wake);
+        self.tx_waker.set_clear_on_wake(clear_on_wake);
+        self.state_waker.set_clear_on_wake(clear_on_wake);
+    }
+
+    /// Clears all the wakers that were assigned to this socket
+    #[cfg(feature = "async")]
+    pub fn clear_wakers(&mut self) {
+        self.rx_waker.clear();
+        self.tx_waker.clear();
+        self.state_waker.clear();
+    }
+
     /// Return the time-to-live (IPv4) or hop limit (IPv6) value used in outgoing packets.
     ///
     /// See also the [set_hop_limit](#method.set_hop_limit) method

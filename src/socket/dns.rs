@@ -352,6 +352,23 @@ impl<'a> Socket<'a> {
         self.queries[handle.0].as_mut().unwrap().waker.add(waker);
     }
 
+    /// Determines if the wakers will be cleared
+    /// when they are triggerd (this is the default behavior)
+    #[cfg(feature = "async")]
+    pub fn set_clear_on_wake(&mut self, clear_on_wake: bool) {
+        self.queries.iter_mut()
+            .filter_map(|w| w.as_mut())
+            .for_each(|w| w.waker.set_clear_on_wake(clear_on_wake));
+    }
+
+    /// Clears all the wakers that were assigned to this socket
+    #[cfg(feature = "async")]
+    pub fn clear_wakers(&mut self) {
+        self.queries.iter_mut()
+            .filter_map(|w| w.as_mut())
+            .for_each(|w| w.waker.clear());
+    }
+
     pub(crate) fn accepts(&self, ip_repr: &IpRepr, udp_repr: &UdpRepr) -> bool {
         (udp_repr.src_port == DNS_PORT
             && self

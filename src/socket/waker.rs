@@ -11,16 +11,17 @@ struct WakerNext {
 #[derive(Debug)]
 pub struct WakerRegistration {
     waker: Option<WakerNext>,
+    clear_on_wake: bool,
 }
 impl Drop for WakerRegistration {
     fn drop(&mut self) {
-        self.wake_all()
+        self.wake_all_and_clear()
     }
 }
 
 impl WakerRegistration {
     pub const fn new() -> Self {
-        Self { waker: None }
+        Self { waker: None, clear_on_wake: true }
     }
 
     /// Register a waker. Overwrites the previous waker, if any.
@@ -65,20 +66,43 @@ impl WakerRegistration {
         }
     }
 
-    /// Wake one registered waker, if any.
-    #[allow(dead_code)]
-    pub fn wake_one(&mut self) {
-        self.waker.take().map(|w| {
-            w.waker.wake();
-            w.next.map(|w2| self.waker.replace(*w2))
-        });
+    /// Determines if the wakers will be cleared
+    /// when they are triggerd (this is the default behavior)
+    pub fn set_clear_on_wake(&mut self, clear_on_wake: bool) {
+        self.clear_on_wake = clear_on_wake;
     }
 
     /// Wake all registered wakers, if any.
     pub fn wake_all(&mut self) {
+        if self.clear_on_wake {
+            self.wake_all_and_clear();
+        } else {
+            self.wake_all_by_ref();
+        }
+    }
+
+    /// Wake all registered wakers, if any.
+    pub fn wake_all_and_clear(&mut self) {
         while let Some(w) = self.waker.take() {
             w.waker.wake();
             w.next.map(|w| self.waker.replace(*w));
         }
+    }
+
+    /// Wake all registered wakers without removing them, if any.
+    pub fn wake_all_by_ref(&self) {
+        if let Some(w) = self.waker.as_ref() {
+            w.waker.wake_by_ref();
+            let mut waker = w.next.as_ref();
+            while let Some(w) = waker {
+                w.waker.wake_by_ref();
+                waker = w.next.as_ref();
+            }
+        }
+    }
+
+    /// Clears all registered wakers without waking them
+    pub fn clear(&mut self) {
+        self.waker.take();
     }
 }

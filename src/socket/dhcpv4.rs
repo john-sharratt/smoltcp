@@ -721,6 +721,19 @@ impl<'a> Socket<'a> {
     pub fn add_waker(&mut self, waker: &Waker) {
         self.waker.add(waker)
     }
+
+    /// Determines if the wakers will be cleared
+    /// when they are triggerd (this is the default behavior)
+    #[cfg(feature = "async")]
+    pub fn set_clear_on_wake(&mut self, clear_on_wake: bool) {
+        self.waker.set_clear_on_wake(clear_on_wake);
+    }
+
+    /// Clears all the wakers that were assigned to this socket
+    #[cfg(feature = "async")]
+    pub fn clear_wakers(&mut self) {
+        self.waker.clear();
+    }
 }
 
 #[cfg(test)]
