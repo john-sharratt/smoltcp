@@ -187,6 +187,24 @@ impl<'a> Socket<'a> {
         self.state_waker.clear();
     }
 
+    /// Clears all the recv wakers that was assigned to this socket
+    #[cfg(feature = "async")]
+    pub fn clear_recv_waker(&mut self) {
+        self.rx_waker.clear();
+    }
+
+    /// Clears all the recv wakers that was assigned to this socket
+    #[cfg(feature = "async")]
+    pub fn clear_send_waker(&mut self) {
+        self.tx_waker.clear();
+    }
+
+    /// Clears all the state change wakers that was assigned to this socket
+    #[cfg(feature = "async")]
+    pub fn clear_state_waker(&mut self) {
+        self.state_waker.clear();
+    }
+
     /// Return the bound endpoint.
     #[inline]
     pub fn endpoint(&self) -> IpListenEndpoint {

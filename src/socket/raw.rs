@@ -160,6 +160,20 @@ impl<'a> Socket<'a> {
         self.tx_waker.clear();
     }
 
+    
+
+    /// Clears all the recv wakers that was assigned to this socket
+    #[cfg(feature = "async")]
+    pub fn clear_recv_waker(&mut self) {
+        self.rx_waker.clear();
+    }
+
+    /// Clears all the recv wakers that was assigned to this socket
+    #[cfg(feature = "async")]
+    pub fn clear_send_waker(&mut self) {
+        self.tx_waker.clear();
+    }
+
     /// Return the IP version the socket is bound to.
     #[inline]
     pub fn ip_version(&self) -> IpVersion {

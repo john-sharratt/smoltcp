@@ -731,7 +731,7 @@ impl<'a> Socket<'a> {
 
     /// Clears all the wakers that were assigned to this socket
     #[cfg(feature = "async")]
-    pub fn clear_wakers(&mut self) {
+    pub fn clear_waker(&mut self) {
         self.waker.clear();
     }
 }
