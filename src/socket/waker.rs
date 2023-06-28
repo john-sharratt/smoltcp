@@ -83,9 +83,13 @@ impl WakerRegistration {
 
     /// Wake all registered wakers, if any.
     pub fn wake_all_and_clear(&mut self) {
-        while let Some(w) = self.waker.take() {
-            w.waker.wake();
-            w.next.map(|w| self.waker.replace(*w));
+        if let Some(mut w) = self.waker.take() {
+            w.waker.wake_by_ref();
+            let mut waker = w.next.take();
+            while let Some(mut w) = waker {
+                w.waker.wake_by_ref();
+                waker = w.next.take();
+            }
         }
     }
 
