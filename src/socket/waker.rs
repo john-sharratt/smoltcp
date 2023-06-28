@@ -49,9 +49,15 @@ impl WakerRegistration {
         match self.waker {
             None => self.register(w),
             Some(ref mut waker) => {
+                if waker.waker.will_wake(w) {
+                    return;
+                }
                 let mut waker = &mut waker.next;
                 loop {
                     waker = match waker {
+                        Some(w2) if w2.waker.will_wake(w) => {
+                            return;
+                        }
                         Some(w2) => &mut w2.next,
                         None => {
                             waker.replace(Box::new(WakerNext {
