@@ -12,6 +12,7 @@ struct WakerNext {
 pub struct WakerRegistration {
     waker: Option<WakerNext>,
     clear_on_wake: bool,
+    wake_on_add: bool,
 }
 impl Drop for WakerRegistration {
     fn drop(&mut self) {
@@ -21,7 +22,11 @@ impl Drop for WakerRegistration {
 
 impl WakerRegistration {
     pub const fn new() -> Self {
-        Self { waker: None, clear_on_wake: true }
+        Self {
+            waker: None,
+            clear_on_wake: true,
+            wake_on_add: false,
+        }
     }
 
     /// Register a waker. Overwrites the previous waker, if any.
@@ -47,7 +52,9 @@ impl WakerRegistration {
     /// Adds a waker building chained list of them.
     pub fn add(&mut self, w: &Waker) {
         match self.waker {
-            None => self.register(w),
+            None => {
+                self.register(w);
+            }
             Some(ref mut waker) => {
                 if waker.waker.will_wake(w) {
                     return;
@@ -69,6 +76,10 @@ impl WakerRegistration {
                     }
                 }
             }
+        }
+        if self.wake_on_add {
+            self.wake_on_add = false;
+            self.wake_all();
         }
     }
 
@@ -96,11 +107,13 @@ impl WakerRegistration {
                 w.waker.wake_by_ref();
                 waker = w.next.take();
             }
+        } else {
+            self.wake_on_add = true;
         }
     }
 
     /// Wake all registered wakers without removing them, if any.
-    pub fn wake_all_by_ref(&self) {
+    pub fn wake_all_by_ref(&mut self) {
         if let Some(w) = self.waker.as_ref() {
             w.waker.wake_by_ref();
             let mut waker = w.next.as_ref();
@@ -108,6 +121,8 @@ impl WakerRegistration {
                 w.waker.wake_by_ref();
                 waker = w.next.as_ref();
             }
+        } else {
+            self.wake_on_add = true;
         }
     }
 

@@ -589,8 +589,6 @@ impl<'a> Socket<'a> {
         self.state_waker.add(waker)
     }
 
-    
-
     /// Determines if the wakers will be cleared
     /// when they are triggerd (this is the default behavior)
     #[cfg(feature = "async")]
@@ -624,6 +622,24 @@ impl<'a> Socket<'a> {
     #[cfg(feature = "async")]
     pub fn clear_state_waker(&mut self) {
         self.state_waker.clear();
+    }
+
+    /// Trigger the recv waker
+    #[cfg(feature = "async")]
+    pub fn trigger_recv_waker(&mut self) {
+        self.rx_waker.wake_all();
+    }
+
+    /// Trigger the send waker
+    #[cfg(feature = "async")]
+    pub fn trigger_send_waker(&mut self) {
+        self.tx_waker.wake_all();
+    }
+
+    /// Trigger the state change waker
+    #[cfg(feature = "async")]
+    pub fn trigger_state_waker(&mut self) {
+        self.state_waker.wake_all();
     }
 
     /// Return the timeout duration.
