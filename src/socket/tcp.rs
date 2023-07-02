@@ -597,14 +597,6 @@ impl<'a> Socket<'a> {
         self.state_waker.clear();
     }
 
-    /// Swaps the wakers of this socket with another socket of the same type
-    #[cfg(feature = "async")]
-    pub fn swap_wakers(&mut self, other: &mut Self) {
-        std::mem::swap(&mut self.rx_waker, &mut other.rx_waker);
-        std::mem::swap(&mut self.tx_waker, &mut other.tx_waker);
-        std::mem::swap(&mut self.state_waker, &mut other.state_waker);
-    }
-
     /// Clears all the recv wakers that was assigned to this socket
     #[cfg(feature = "async")]
     pub fn clear_recv_waker(&mut self) {
