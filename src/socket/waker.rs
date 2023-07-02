@@ -92,6 +92,7 @@ impl WakerRegistration {
 
     /// Clears all registered wakers without waking them
     pub fn clear(&mut self) {
+        self.wake_on_add = false;
         self.waker.take();
     }
 }
