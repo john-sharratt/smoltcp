@@ -48,8 +48,8 @@ pub type PacketBuffer<'a> = crate::storage::PacketBuffer<'a, ()>;
 /// transmit and receive packet buffers.
 #[derive(Debug)]
 pub struct Socket<'a> {
-    ip_version: IpVersion,
-    ip_protocol: IpProtocol,
+    ip_version: Option<IpVersion>,
+    ip_protocol: Option<IpProtocol>,
     rx_buffer: PacketBuffer<'a>,
     tx_buffer: PacketBuffer<'a>,
     #[cfg(feature = "async")]
@@ -68,8 +68,25 @@ impl<'a> Socket<'a> {
         tx_buffer: PacketBuffer<'a>,
     ) -> Socket<'a> {
         Socket {
-            ip_version,
-            ip_protocol,
+            ip_version: Some(ip_version),
+            ip_protocol: Some(ip_protocol),
+            rx_buffer,
+            tx_buffer,
+            #[cfg(feature = "async")]
+            rx_waker: WakerRegistration::new(),
+            #[cfg(feature = "async")]
+            tx_waker: WakerRegistration::new(),
+        }
+    }
+    /// Create a raw IP socket bound to the given IP version and datagram protocol,
+    /// with the given buffers.
+    pub fn new_generic(
+        rx_buffer: PacketBuffer<'a>,
+        tx_buffer: PacketBuffer<'a>,
+    ) -> Socket<'a> {
+        Socket {
+            ip_version: None,
+            ip_protocol: None,
             rx_buffer,
             tx_buffer,
             #[cfg(feature = "async")]
@@ -166,13 +183,13 @@ impl<'a> Socket<'a> {
 
     /// Return the IP version the socket is bound to.
     #[inline]
-    pub fn ip_version(&self) -> IpVersion {
+    pub fn ip_version(&self) -> Option<IpVersion> {
         self.ip_version
     }
 
     /// Return the IP protocol the socket is bound to.
     #[inline]
-    pub fn ip_protocol(&self) -> IpProtocol {
+    pub fn ip_protocol(&self) -> Option<IpProtocol> {
         self.ip_protocol
     }
 
@@ -230,7 +247,7 @@ impl<'a> Socket<'a> {
             .map_err(|_| SendError::BufferFull)?;
 
         net_trace!(
-            "raw:{}:{}: buffer to send {} octets",
+            "raw:{:?}:{:?}: buffer to send {} octets",
             self.ip_version,
             self.ip_protocol,
             packet_buf.len()
@@ -252,7 +269,7 @@ impl<'a> Socket<'a> {
             .map_err(|_| SendError::BufferFull)?;
 
         net_trace!(
-            "raw:{}:{}: buffer to send {} octets",
+            "raw:{:?}:{:?}: buffer to send {} octets",
             self.ip_version,
             self.ip_protocol,
             size
@@ -279,7 +296,7 @@ impl<'a> Socket<'a> {
         let ((), packet_buf) = self.rx_buffer.dequeue().map_err(|_| RecvError::Exhausted)?;
 
         net_trace!(
-            "raw:{}:{}: receive {} buffered octets",
+            "raw:{:?}:{:?}: receive {} buffered octets",
             self.ip_version,
             self.ip_protocol,
             packet_buf.len()
@@ -306,7 +323,7 @@ impl<'a> Socket<'a> {
         let ((), packet_buf) = self.rx_buffer.peek().map_err(|_| RecvError::Exhausted)?;
 
         net_trace!(
-            "raw:{}:{}: receive {} buffered octets",
+            "raw:{:?}:{:?}: receive {} buffered octets",
             self.ip_version,
             self.ip_protocol,
             packet_buf.len()
@@ -328,11 +345,15 @@ impl<'a> Socket<'a> {
     }
 
     pub(crate) fn accepts(&self, ip_repr: &IpRepr) -> bool {
-        if ip_repr.version() != self.ip_version {
-            return false;
+        if let Some(ip_version) = self.ip_version {
+            if ip_repr.version() != ip_version {
+                return false;
+            }
         }
-        if ip_repr.next_header() != self.ip_protocol {
-            return false;
+        if let Some(ip_protocol) = self.ip_protocol {
+            if ip_repr.next_header() != ip_protocol {
+                return false;
+            }
         }
 
         true
@@ -345,7 +366,7 @@ impl<'a> Socket<'a> {
         let total_len = header_len + payload.len();
 
         net_trace!(
-            "raw:{}:{}: receiving {} octets",
+            "raw:{:?}:{:?}: receiving {} octets",
             self.ip_version,
             self.ip_protocol,
             total_len
@@ -357,7 +378,7 @@ impl<'a> Socket<'a> {
                 buf[header_len..].copy_from_slice(payload);
             }
             Err(_) => net_trace!(
-                "raw:{}:{}: buffer full, dropped incoming packet",
+                "raw:{:?}:{:?}: buffer full, dropped incoming packet",
                 self.ip_version,
                 self.ip_protocol
             ),
@@ -385,9 +406,11 @@ impl<'a> Socket<'a> {
                             return Ok(());
                         }
                     };
-                    if packet.next_header() != ip_protocol {
-                        net_trace!("raw: sent packet with wrong ip protocol, dropping.");
-                        return Ok(());
+                    if let Some(ip_protocol) = self.ip_protocol {
+                       if packet.next_header() != ip_protocol {
+                            net_trace!("raw: sent packet with wrong ip protocol, dropping.");
+                            return Ok(());
+                        }
                     }
                     if _checksum_caps.ipv4.tx() {
                         packet.fill_checksum();
@@ -405,7 +428,7 @@ impl<'a> Socket<'a> {
                             return Ok(());
                         }
                     };
-                    net_trace!("raw:{}:{}: sending", ip_version, ip_protocol);
+                    net_trace!("raw:{:?}:{:?}: sending", ip_version, ip_protocol);
                     emit(cx, (IpRepr::Ipv4(ipv4_repr), packet.payload()))
                 }
                 #[cfg(feature = "proto-ipv6")]
@@ -417,9 +440,11 @@ impl<'a> Socket<'a> {
                             return Ok(());
                         }
                     };
-                    if packet.next_header() != ip_protocol {
-                        net_trace!("raw: sent ipv6 packet with wrong ip protocol, dropping.");
-                        return Ok(());
+                    if let Some(ip_protocol) = ip_protocol {
+                        if packet.next_header() != ip_protocol {
+                            net_trace!("raw: sent ipv6 packet with wrong ip protocol, dropping.");
+                            return Ok(());
+                        }
                     }
                     let packet = Ipv6Packet::new_unchecked(&*packet.into_inner());
                     let ipv6_repr = match Ipv6Repr::parse(&packet) {
@@ -430,7 +455,7 @@ impl<'a> Socket<'a> {
                         }
                     };
 
-                    net_trace!("raw:{}:{}: sending", ip_version, ip_protocol);
+                    net_trace!("raw:{:?}:{:?}: sending", ip_version, ip_protocol);
                     emit(cx, (IpRepr::Ipv6(ipv6_repr), packet.payload()))
                 }
                 Err(_) => {
