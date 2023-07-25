@@ -161,7 +161,10 @@ impl InterfaceInner {
             }
 
             #[cfg(feature = "socket-tcp")]
-            IpProtocol::Tcp => self.process_tcp(sockets, ip_repr, ip_payload),
+            IpProtocol::Tcp => {
+                let reset_orphans = handled_by_raw_socket == false;
+                self.process_tcp(sockets, ip_repr, ip_payload, reset_orphans)
+            },
 
             _ if handled_by_raw_socket => None,
 

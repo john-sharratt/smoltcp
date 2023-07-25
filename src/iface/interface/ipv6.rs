@@ -76,7 +76,10 @@ impl InterfaceInner {
             }
 
             #[cfg(feature = "socket-tcp")]
-            IpProtocol::Tcp => self.process_tcp(sockets, ipv6_repr.into(), ip_payload),
+            IpProtocol::Tcp => {
+                let reset_orphans = handled_by_raw_socket == false;
+                self.process_tcp(sockets, ipv6_repr.into(), ip_payload, reset_orphans)
+            },
 
             IpProtocol::HopByHop => {
                 self.process_hopbyhop(sockets, ipv6_repr, handled_by_raw_socket, ip_payload)

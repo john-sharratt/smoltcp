@@ -1484,6 +1484,7 @@ impl InterfaceInner {
         sockets: &mut SocketSet,
         ip_repr: IpRepr,
         ip_payload: &'frame [u8],
+        reset_orphans: bool,
     ) -> Option<IpPacket<'frame>> {
         let (src_addr, dst_addr) = (ip_repr.src_addr(), ip_repr.dst_addr());
         let tcp_packet = check!(TcpPacket::new_checked(ip_payload));
@@ -1508,7 +1509,7 @@ impl InterfaceInner {
         if tcp_repr.control == TcpControl::Rst {
             // Never reply to a TCP RST packet with another TCP RST packet.
             None
-        } else {
+        } else if reset_orphans {
             // The packet wasn't handled by a socket, send a TCP RST packet.
             net_trace!(
                 "packet wasn't handled by a socket, sending a TCP RST packet. (src_addr={}, dst_addr={})",
@@ -1516,6 +1517,10 @@ impl InterfaceInner {
                 dst_addr
             );
             Some(IpPacket::Tcp(tcp::Socket::rst_reply(&ip_repr, &tcp_repr)))
+        } else {
+            // Silently ignore the packet (most likely because it is
+            // being handled somewhere else)
+            None
         }
     }
 
