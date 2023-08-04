@@ -43,6 +43,7 @@ bitflags! {
         const ON_LINK     = 0b10000000;
         const ADDRCONF    = 0b01000000;
         const ROUTER_ADDR = 0b00100000;
+        const SITE        = 0b00010000;
     }
 }
 

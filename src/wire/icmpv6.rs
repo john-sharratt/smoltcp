@@ -805,8 +805,64 @@ impl<'a> fmt::Display for Repr<'a> {
             Repr::ParamProblem { reason, .. } => {
                 write!(f, "ICMPv6 param problem ({reason})")
             },
-            Repr::Ndisc(_) => {
-                write!(f, "ICMPv6 ndisc")
+            Repr::Ndisc(ndisc) => {
+                write!(f, "ICMPv6 ndisc")?;
+                match ndisc {
+                    NdiscRepr::RouterSolicit { lladdr } => {
+                        write!(f, " router solicit")?;
+                        if let Some(lladdr) = lladdr.as_ref() {
+                            write!(f, " lladdr={}", lladdr)?;
+                        }
+                    },
+                    NdiscRepr::RouterAdvert { hop_limit, flags, router_lifetime, reachable_time, retrans_time, lladdr, mtu, prefix_info } => {
+                        write!(f, " router advert")?;
+                        if let Some(lladdr) = lladdr.as_ref() {
+                            write!(f, " lladdr={}", lladdr)?;
+                        }
+                        write!(f, " hop_limit={}", hop_limit)?;
+                        write!(f, " flags={:?}", flags)?;
+                        write!(f, " router-lifetime={}", router_lifetime)?;
+                        write!(f, " reachable-time={}", reachable_time)?;
+                        write!(f, " retrans-time={}", retrans_time)?;
+                        if let Some(mtu) = mtu.as_ref() {
+                            write!(f, " mut={}", mtu)?;
+                        }
+                        if let Some(info) = prefix_info.as_ref() {
+                            write!(f, " prefix-info")?;
+                            write!(f, " flags={:?}", info.flags)?;
+                            write!(f, " valid-lifetime={}", info.valid_lifetime)?;
+                            write!(f, " preferred-lifetime={}", info.preferred_lifetime)?;
+                            write!(f, " prefix={}/{}", info.prefix, info.prefix_len)?;
+                        }
+                    },
+                    NdiscRepr::NeighborSolicit { target_addr, lladdr } => {
+                        write!(f, " neighbor solicit")?;
+                        if let Some(lladdr) = lladdr.as_ref() {
+                            write!(f, " lladdr={}", lladdr)?;
+                        }
+                        write!(f, " target={}", target_addr)?;
+                    },
+                    NdiscRepr::NeighborAdvert { flags, target_addr, lladdr } => {
+                        write!(f, " neighbor advert")?;
+                        write!(f, " flags={:?}", flags)?;
+                        if let Some(lladdr) = lladdr.as_ref() {
+                            write!(f, " lladdr={}", lladdr)?;
+                        }
+                        write!(f, " target-addr={}", target_addr)?;
+                    },
+                    NdiscRepr::Redirect { target_addr, dest_addr, lladdr, redirected_hdr } => {
+                        write!(f, " redirect")?;
+                        if let Some(lladdr) = lladdr.as_ref() {
+                            write!(f, " lladdr={}", lladdr)?;
+                        }
+                        write!(f, " target-addr={}", target_addr)?;
+                        write!(f, " dest-addr={}", dest_addr)?;
+                        if let Some(_) = redirected_hdr.as_ref() {
+                            write!(f, " redirected-hdr")?;
+                        }
+                    },
+                }
+                Ok(())
             },
             Repr::Mld(_) => {
                 write!(f, "ICMPv6 mld")
