@@ -1,7 +1,7 @@
 // See https://datatracker.ietf.org/doc/html/rfc8415 for the DHCPv6 specification.
 
 use byteorder::{ByteOrder, NetworkEndian};
-use core::iter;
+use core::{iter, fmt};
 use heapless::Vec;
 
 use super::{Error, Result};
@@ -32,6 +32,31 @@ enum_with_unknown! {
         LeaseQueryReply = 15,
         LeaseQueryDone = 16,
         LeaseQueryData = 17,
+    }
+}
+
+impl fmt::Display for MessageType {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match *self {
+            Self::Solicit => write!(f, "solicit"),
+            Self::Advertise => write!(f, "advertise"),
+            Self::Request => write!(f, "request"),
+            Self::Confirm => write!(f, "confirm"),
+            Self::Renew => write!(f, "renew"),
+            Self::Rebind => write!(f, "rebind"),
+            Self::Reply => write!(f, "reply"),
+            Self::Release => write!(f, "release"),
+            Self::Decline => write!(f, "decline"),
+            Self::Reconfigure => write!(f, "reconfigure"),
+            Self::InformationRequest => write!(f, "information-request"),
+            Self::RelayForw => write!(f, "relay-forw"),
+            Self::RelayRepl => write!(f, "relay-repl"),
+            Self::LeaseQuery => write!(f, "lease-query"),
+            Self::LeaseQueryReply => write!(f, "lease-query-reply"),
+            Self::LeaseQueryDone => write!(f, "lease-query-done"),
+            Self::LeaseQueryData => write!(f, "lease-query-data"),
+            Self::Unknown(a) => write!(f, "unknown({a})"),
+        }
     }
 }
 
@@ -1830,6 +1855,51 @@ impl<'a> Repr<'a> {
     }
 }
 
+impl<'a, T: AsRef<[u8]> + ?Sized> fmt::Display for Packet<&'a T> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match Repr::parse(self) {
+            Ok(repr) => write!(f, "{repr}"),
+            Err(err) => {
+                write!(f, "DHCPv4 ({err})")
+            }
+        }
+    }
+}
+
+impl<'a> fmt::Display for Repr<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "DHCPv6 msg-type={} trans-id={}",
+            self.message_type,
+            self.transaction_id)?;
+
+        if let Some(server_id) = self.server_id.as_ref() {
+            write!(f, " server-id={:X?}", server_id)?;
+        }
+        if let Some(client_id) = self.client_id.as_ref() {
+            write!(f, " client-id={:X?}", client_id)?;
+        }
+        if let Some(elapsed_time) = self.elapsed_time.as_ref() {
+            write!(f, " elapsed-time={}/100s", elapsed_time)?;
+        }
+        if let Some(request_options) = self.request_options.as_ref() {
+            write!(f, " ops=")?;
+            for opt in request_options.iter() {
+                write!(f, "{opt},")?;
+            }
+        }
+        if let Some(ia_na) = self.ia_na.as_ref() {
+            write!(f, " ia-na {ia_na}")?;
+        }
+        if let Some(ia_ta) = self.ia_ta.as_ref() {
+            write!(f, " ia-na {ia_ta}")?;
+        }
+        if let Some(dns_servers) = self.dns_servers.as_ref() {
+            write!(f, " dns-servers {dns_servers}")?;
+        }
+        Ok(())
+    }
+}
+
 #[derive(Debug, PartialEq, Eq, Clone)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct ReprIaNa<'a> {
@@ -1919,6 +1989,19 @@ impl<'a> ReprIaNa<'a> {
     }
 }
 
+impl<'a> fmt::Display for ReprIaNa<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "ia-na iaid={} t1={} t2={}",
+            self.iaid,
+            self.t1,
+            self.t2)?;        
+        for addr in self.addresses.iter() {
+            write!(f, " addr={}", addr)?;
+        }
+        Ok(())
+    }
+}
+
 #[derive(Debug, PartialEq, Eq, Clone)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct ReprIaTa<'a> {
@@ -1984,6 +2067,17 @@ impl<'a> ReprIaTa<'a> {
             dhcp_options.emit(*opt)?;
         }
 
+        Ok(())
+    }
+}
+
+impl<'a> fmt::Display for ReprIaTa<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "ia-ta iaid={}",
+            self.iaid)?;        
+        for addr in self.addresses.iter() {
+            write!(f, " addr={}", addr)?;
+        }
         Ok(())
     }
 }
@@ -2083,6 +2177,16 @@ impl<'a> ReprIaAddr<'a> {
     }
 }
 
+impl<'a> fmt::Display for ReprIaAddr<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}(preferred-lifetime={} valid-lifetime={})",
+            self.addr,
+            self.preferred_lifetime,
+            self.valid_lifetime)?;
+        Ok(())
+    }
+}
+
 #[derive(Debug, PartialEq, Eq, Clone)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct ReprDnsServers {
@@ -2128,5 +2232,31 @@ impl ReprDnsServers {
         }
 
         Ok(())
+    }
+}
+
+impl<'a> fmt::Display for ReprDnsServers {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "dns-server")?;
+        for addr in self.addresses.iter() {
+            write!(f, " addr={}", addr)?;
+        }
+        Ok(())
+    }
+}
+
+use crate::wire::pretty_print::{PrettyIndent, PrettyPrint};
+
+impl<T: AsRef<[u8]>> PrettyPrint for Packet<T> {
+    fn pretty_print(
+        buffer: &dyn AsRef<[u8]>,
+        f: &mut fmt::Formatter,
+        indent: &mut PrettyIndent,
+    ) -> fmt::Result {
+        let packet = match Packet::new_checked(buffer) {
+            Err(err) => return write!(f, "{indent}({err})"),
+            Ok(packet) => packet,
+        };
+        write!(f, "{indent}{packet}")
     }
 }

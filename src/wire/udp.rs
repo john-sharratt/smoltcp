@@ -321,10 +321,47 @@ impl<T: AsRef<[u8]>> PrettyPrint for Packet<T> {
         f: &mut fmt::Formatter,
         indent: &mut PrettyIndent,
     ) -> fmt::Result {
-        match Packet::new_checked(buffer) {
-            Err(err) => write!(f, "{indent}({err})"),
-            Ok(packet) => write!(f, "{indent}{packet}"),
-        }
+        let checksum_caps = ChecksumCapabilities::ignored();
+
+        let (udp_repr, payload) = match Packet::new_checked(buffer) {
+            Err(err) => {
+                write!(f, "{indent}({err})")?;
+                return Ok(());
+            },
+            Ok(udp_packet) => match Repr::parse(&udp_packet, &IpAddress::Ipv4(super::Ipv4Address::UNSPECIFIED), &IpAddress::Ipv4(super::Ipv4Address::UNSPECIFIED), &checksum_caps) {
+                Err(_) => return Ok(()),
+                Ok(udp_repr) => {
+                    write!(f, "{indent}{udp_repr}")?;
+                    (udp_repr, udp_packet.payload())
+                }
+            }
+        };
+        pretty_print_udp_payload(f, indent, udp_repr, payload)
+    }
+}
+
+pub fn pretty_print_udp_payload<T: Into<Repr>>(
+    f: &mut fmt::Formatter,
+    indent: &mut PrettyIndent,
+    udp_repr: T,
+    payload: &[u8],
+) -> fmt::Result {
+    use crate::wire::{DHCP_SERVER_PORT, DHCPV6_SERVER_PORT};
+
+    #[cfg(feature = "proto-dhcpv4")]
+    use crate::wire::DhcpPacket;
+    #[cfg(feature = "proto-dhcpv6")]
+    use crate::wire::Dhcpv6Packet;
+
+    let repr: Repr = udp_repr.into();
+    if repr.dst_port == DHCP_SERVER_PORT || repr.src_port == DHCP_SERVER_PORT  {
+        indent.increase(f)?;
+        DhcpPacket::<&[u8]>::pretty_print(&payload, f, indent)
+    } else if repr.dst_port == DHCPV6_SERVER_PORT || repr.src_port == DHCPV6_SERVER_PORT  {
+        indent.increase(f)?;
+        Dhcpv6Packet::<&[u8]>::pretty_print(&payload, f, indent)
+    } else {
+        Ok(())
     }
 }
 

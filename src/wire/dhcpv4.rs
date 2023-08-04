@@ -2,7 +2,7 @@
 
 use bitflags::bitflags;
 use byteorder::{ByteOrder, NetworkEndian};
-use core::iter;
+use core::{iter, fmt};
 use heapless::Vec;
 
 use super::{Error, Result};
@@ -23,6 +23,16 @@ enum_with_unknown! {
     }
 }
 
+impl fmt::Display for OpCode {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match *self {
+            Self::Request => write!(f, "request"),
+            Self::Reply => write!(f, "reply"),
+            Self::Unknown(a) => write!(f, "unknown({a})"),
+        }
+    }
+}
+
 enum_with_unknown! {
     /// The possible message types of a DHCP packet.
     pub enum MessageType(u8) {
@@ -34,6 +44,22 @@ enum_with_unknown! {
         Nak = 6,
         Release = 7,
         Inform = 8,
+    }
+}
+
+impl fmt::Display for MessageType {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match *self {
+            Self::Discover => write!(f, "discover"),
+            Self::Offer => write!(f, "offer"),
+            Self::Request => write!(f, "request"),
+            Self::Decline => write!(f, "decline"),
+            Self::Ack => write!(f, "ack"),
+            Self::Nak => write!(f, "nak"),
+            Self::Release => write!(f, "release"),
+            Self::Inform => write!(f, "inform"),
+            Self::Unknown(a) => write!(f, "unknown({a})"),
+        }
     }
 }
 
@@ -942,6 +968,57 @@ impl<'a> Repr<'a> {
         }
 
         Ok(())
+    }
+}
+
+impl<'a, T: AsRef<[u8]> + ?Sized> fmt::Display for Packet<&'a T> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match Repr::parse(self) {
+            Ok(repr) => write!(f, "{repr}"),
+            Err(err) => {
+                write!(f, "DHCPv4 ({err})")
+            }
+        }
+    }
+}
+
+impl<'a> fmt::Display for Repr<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "DHCPv4 opcode={} msg-type={} trans-id={} secs={} client-hardware-address={} client-ip={} your-ip={} server-ip={}",
+            self.message_type.opcode(),
+            self.message_type,
+            self.transaction_id,
+            self.secs,
+            self.client_hardware_address,
+            self.client_ip,
+            self.your_ip,
+            self.server_ip)?;
+        if let Some(router) = self.router.as_ref() {
+            write!(f, " router={}", router)?;
+        }
+        if let Some(subnet_mask) = self.subnet_mask.as_ref() {
+            write!(f, " subnet-mask={}", subnet_mask)?;
+        }
+        if let Some(lease_duration) = self.lease_duration.as_ref() {
+            write!(f, " lease-duration={}", lease_duration)?;
+        }
+        Ok(())
+    }
+}
+
+use crate::wire::pretty_print::{PrettyIndent, PrettyPrint};
+
+impl<T: AsRef<[u8]>> PrettyPrint for Packet<T> {
+    fn pretty_print(
+        buffer: &dyn AsRef<[u8]>,
+        f: &mut fmt::Formatter,
+        indent: &mut PrettyIndent,
+    ) -> fmt::Result {
+        let packet = match Packet::new_checked(buffer) {
+            Err(err) => return write!(f, "{indent}({err})"),
+            Ok(packet) => packet,
+        };
+        write!(f, "{indent}{packet}")
     }
 }
 

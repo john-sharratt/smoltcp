@@ -809,7 +809,7 @@ pub fn pretty_print_ip_payload<T: Into<Repr>>(
     use super::pretty_print::PrettyPrint;
     use crate::wire::ip::checksum::format_checksum;
     #[cfg(feature = "proto-ipv4")]
-    use crate::wire::Icmpv4Packet;
+    use crate::wire::{Icmpv4Packet, Icmpv6Packet};
     use crate::wire::{TcpPacket, TcpRepr, UdpPacket, UdpRepr};
 
     let checksum_caps = ChecksumCapabilities::ignored();
@@ -819,6 +819,10 @@ pub fn pretty_print_ip_payload<T: Into<Repr>>(
         Protocol::Icmp => {
             indent.increase(f)?;
             Icmpv4Packet::<&[u8]>::pretty_print(&payload, f, indent)
+        }
+        Protocol::Icmpv6 => {
+            indent.increase(f)?;
+            Icmpv6Packet::<&[u8]>::pretty_print(&payload, f, indent)
         }
         Protocol::Udp => {
             indent.increase(f)?;

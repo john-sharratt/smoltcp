@@ -747,6 +747,98 @@ impl<'a> Repr<'a> {
     }
 }
 
+impl<'a, T: AsRef<[u8]> + ?Sized> fmt::Display for Packet<&'a T> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match Repr::parse(&IpAddress::Ipv4(super::Ipv4Address::UNSPECIFIED), &IpAddress::Ipv4(super::Ipv4Address::UNSPECIFIED), self, &ChecksumCapabilities::ignored()) {
+            Ok(repr) => write!(f, "{repr}"),
+            Err(err) => {
+                write!(f, "ICMPv4 ({err})")?;
+                write!(f, " type={:?}", self.msg_type())?;
+                match self.msg_type() {
+                    Message::DstUnreachable => {
+                        write!(f, " code={:?}", DstUnreachable::from(self.msg_code()))
+                    }
+                    Message::TimeExceeded => {
+                        write!(f, " code={:?}", TimeExceeded::from(self.msg_code()))
+                    }
+                    _ => write!(f, " code={}", self.msg_code()),
+                }
+            }
+        }
+    }
+}
+
+impl<'a> fmt::Display for Repr<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match *self {
+            Repr::EchoRequest {
+                ident,
+                seq_no,
+                data,
+            } => write!(
+                f,
+                "ICMPv6 echo request id={} seq={} len={}",
+                ident,
+                seq_no,
+                data.len()
+            ),
+            Repr::EchoReply {
+                ident,
+                seq_no,
+                data,
+            } => write!(
+                f,
+                "ICMPv6 echo reply id={} seq={} len={}",
+                ident,
+                seq_no,
+                data.len()
+            ),
+            Repr::DstUnreachable { reason, .. } => {
+                write!(f, "ICMPv6 destination unreachable ({reason})")
+            }
+            Repr::TimeExceeded { reason, .. } => {
+                write!(f, "ICMPv6 time exceeded ({reason})")
+            }
+            Repr::PktTooBig { mtu, data, .. } => {
+                write!(f, "ICMPv6 pkt too big mtu={mtu} data.len()={}", data.len())
+            },
+            Repr::ParamProblem { reason, .. } => {
+                write!(f, "ICMPv6 param problem ({reason})")
+            },
+            Repr::Ndisc(_) => {
+                write!(f, "ICMPv6 ndisc")
+            },
+            Repr::Mld(_) => {
+                write!(f, "ICMPv6 mld")
+            },
+        }
+    }
+}
+
+use crate::wire::pretty_print::{PrettyIndent, PrettyPrint};
+
+impl<T: AsRef<[u8]>> PrettyPrint for Packet<T> {
+    fn pretty_print(
+        buffer: &dyn AsRef<[u8]>,
+        f: &mut fmt::Formatter,
+        indent: &mut PrettyIndent,
+    ) -> fmt::Result {
+        let packet = match Packet::new_checked(buffer) {
+            Err(err) => return write!(f, "{indent}({err})"),
+            Ok(packet) => packet,
+        };
+        write!(f, "{indent}{packet}")?;
+
+        match packet.msg_type() {
+            Message::DstUnreachable | Message::TimeExceeded => {
+                indent.increase(f)?;
+                super::Ipv6Packet::<&[u8]>::pretty_print(&packet.payload(), f, indent)
+            }
+            _ => Ok(()),
+        }
+    }
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
