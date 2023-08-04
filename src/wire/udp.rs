@@ -346,23 +346,21 @@ pub fn pretty_print_udp_payload<T: Into<Repr>>(
     udp_repr: T,
     payload: &[u8],
 ) -> fmt::Result {
-    use crate::wire::{DHCP_SERVER_PORT, DHCPV6_SERVER_PORT};
+    let repr: Repr = udp_repr.into();
 
     #[cfg(feature = "proto-dhcpv4")]
-    use crate::wire::DhcpPacket;
-    #[cfg(feature = "proto-dhcpv6")]
-    use crate::wire::Dhcpv6Packet;
-
-    let repr: Repr = udp_repr.into();
-    if repr.dst_port == DHCP_SERVER_PORT || repr.src_port == DHCP_SERVER_PORT  {
+    if repr.dst_port == crate::wire::DHCP_SERVER_PORT || repr.src_port == crate::wire::DHCP_SERVER_PORT  {
         indent.increase(f)?;
-        DhcpPacket::<&[u8]>::pretty_print(&payload, f, indent)
-    } else if repr.dst_port == DHCPV6_SERVER_PORT || repr.src_port == DHCPV6_SERVER_PORT  {
-        indent.increase(f)?;
-        Dhcpv6Packet::<&[u8]>::pretty_print(&payload, f, indent)
-    } else {
-        Ok(())
+        return crate::wire::DhcpPacket::<&[u8]>::pretty_print(&payload, f, indent);
     }
+    
+    #[cfg(feature = "proto-dhcpv6")]
+    if repr.dst_port == crate::wire::DHCPV6_SERVER_PORT || repr.src_port == crate::wire::DHCPV6_SERVER_PORT  {
+        indent.increase(f)?;
+        return crate::wire::Dhcpv6Packet::<&[u8]>::pretty_print(&payload, f, indent);
+    }
+
+    Ok(())
 }
 
 #[cfg(test)]
