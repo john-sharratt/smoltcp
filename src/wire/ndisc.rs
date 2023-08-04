@@ -12,8 +12,12 @@ use crate::wire::{NdiscPrefixInformation, NdiscRedirectedHeader};
 bitflags! {
     #[cfg_attr(feature = "defmt", derive(defmt::Format))]
     pub struct RouterFlags: u8 {
-        const MANAGED = 0b10000000;
-        const OTHER   = 0b01000000;
+        const MANAGED    = 0b10000000;
+        const OTHER      = 0b01000000;
+        const HOME_AGENT = 0b00100000;
+        const PREF_HIGH  = 0b00010000;
+        const PREF_LOW   = 0b00001000;
+        const PROXY      = 0b00000100;
     }
 }
 

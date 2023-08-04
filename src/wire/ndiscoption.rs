@@ -40,8 +40,9 @@ impl fmt::Display for Type {
 bitflags! {
     #[cfg_attr(feature = "defmt", derive(defmt::Format))]
     pub struct PrefixInfoFlags: u8 {
-        const ON_LINK  = 0b10000000;
-        const ADDRCONF = 0b01000000;
+        const ON_LINK     = 0b10000000;
+        const ADDRCONF    = 0b01000000;
+        const ROUTER_ADDR = 0b00100000;
     }
 }
 

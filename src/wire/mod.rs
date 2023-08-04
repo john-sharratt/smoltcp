@@ -81,6 +81,8 @@ pub mod pretty_print;
 mod arp;
 #[cfg(feature = "proto-dhcpv4")]
 pub(crate) mod dhcpv4;
+#[cfg(feature = "proto-dhcpv6")]
+pub(crate) mod dhcpv6;
 #[cfg(feature = "proto-dns")]
 pub(crate) mod dns;
 #[cfg(feature = "medium-ethernet")]
@@ -248,6 +250,15 @@ pub use self::dhcpv4::{
     DhcpOption, DhcpOptionWriter, MessageType as DhcpMessageType, Packet as DhcpPacket,
     Repr as DhcpRepr, CLIENT_PORT as DHCP_CLIENT_PORT,
     MAX_DNS_SERVER_COUNT as DHCP_MAX_DNS_SERVER_COUNT, SERVER_PORT as DHCP_SERVER_PORT,
+};
+
+#[cfg(feature = "proto-dhcpv6")]
+pub use self::dhcpv6::{
+    Dhcpv6Option, Dhcpv6OptionWriter, MessageType as Dhcpv6MessageType, Packet as Dhcpv6Packet,
+    Repr as Dhcpv6Repr, CLIENT_PORT as DHCPV6_CLIENT_PORT,
+    ReprIaNa as Dhcpv6ReprIaNa, ReprIaTa as Dhcpv6ReprIaTa, ReprIaAddr as Dhcpv6ReprIaAddr,
+    ReprDnsServers as Dhcpv6ReprDnsServers,
+    MAX_REQUEST_OPTIONS as DHCPV6_MAX_REQUEST_OPTIONS, SERVER_PORT as DHCPV6_SERVER_PORT,
 };
 
 #[cfg(feature = "proto-dns")]

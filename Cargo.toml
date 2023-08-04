@@ -49,6 +49,7 @@ defmt = [ "dep:defmt", "heapless/defmt", "heapless/defmt-impl" ]
 "proto-ipv4-fragmentation" = ["proto-ipv4"]
 "proto-igmp" = ["proto-ipv4"]
 "proto-dhcpv4" = ["proto-ipv4"]
+"proto-dhcpv6" = ["proto-ipv6"]
 "proto-ipv6" = []
 "proto-sixlowpan" = ["proto-ipv6"]
 "proto-sixlowpan-fragmentation" = ["proto-sixlowpan"]
@@ -60,6 +61,7 @@ defmt = [ "dep:defmt", "heapless/defmt", "heapless/defmt-impl" ]
 "socket-tcp" = ["socket"]
 "socket-icmp" = ["socket"]
 "socket-dhcpv4" = ["socket", "medium-ethernet", "proto-dhcpv4"]
+"socket-dhcpv6" = ["socket", "medium-ethernet", "proto-dhcpv6"]
 "socket-dns" = ["socket", "proto-dns"]
 "socket-mdns" = ["socket-dns"]
 
@@ -69,9 +71,9 @@ default = [
   "std", "log", # needed for `cargo test --no-default-features --features default` :/
   "medium-ethernet", "medium-ip", "medium-ieee802154",
   "phy-raw_socket", "phy-tuntap_interface",
-  "proto-ipv4", "proto-igmp", "proto-dhcpv4", "proto-ipv6", "proto-dns",
+  "proto-ipv4", "proto-igmp", "proto-dhcpv4", "proto-dhcpv6", "proto-ipv6", "proto-dns",
   "proto-ipv4-fragmentation", "proto-sixlowpan-fragmentation",
-  "socket-raw", "socket-icmp", "socket-udp", "socket-tcp", "socket-dhcpv4", "socket-dns", "socket-mdns",
+  "socket-raw", "socket-icmp", "socket-udp", "socket-tcp", "socket-dhcpv4", "socket-dhcpv6", "socket-dns", "socket-mdns",
   "async"
 ]
 
@@ -114,7 +116,7 @@ required-features = ["std", "medium-ethernet", "medium-ip", "phy-tuntap_interfac
 
 [[example]]
 name = "dhcp_client"
-required-features = ["std", "medium-ethernet", "medium-ip", "phy-tuntap_interface", "proto-ipv4", "proto-dhcpv4", "socket-raw"]
+required-features = ["std", "medium-ethernet", "medium-ip", "phy-tuntap_interface", "proto-ipv4", "proto-dhcpv4", "proto-dhcpv6", "socket-raw"]
 
 [[example]]
 name = "sixlowpan"
