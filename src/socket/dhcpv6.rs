@@ -728,7 +728,7 @@ impl<'a> Socket<'a> {
 
         let mut ipv6_repr = Ipv6Repr {
             src_addr: Ipv6Address::UNSPECIFIED,
-            dst_addr: Ipv6Address::LINK_LOCAL_ALL_NODES,
+            dst_addr: Ipv6Address::LINK_LOCAL_ALL_ROUTERS,
             next_header: IpProtocol::Udp,
             payload_len: 0, // filled right before emit
             hop_limit: 64,
@@ -746,7 +746,7 @@ impl<'a> Socket<'a> {
                 });
                 ipv6_repr = Ipv6Repr {
                     src_addr: Ipv6Address::UNSPECIFIED,
-                    dst_addr: Ipv6Address::LINK_LOCAL_ALL_NODES,
+                    dst_addr: Ipv6Address::LINK_LOCAL_ALL_ROUTERS,
                     next_header: IpProtocol::Icmpv6,
                     payload_len: icmp_repr.buffer_len(),
                     hop_limit: 64,
