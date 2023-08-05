@@ -60,6 +60,8 @@ struct RouterSolicitState {
 #[derive(Debug)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 struct DhcpSolicitState {
+    /// Client ID used for the transaction
+    client_id: Vec<u8, MAX_IDENTIFIER_LEN>,
     /// When to send next request
     retry_at: Instant,
     /// How many retries have been done
@@ -73,6 +75,8 @@ struct DhcpSolicitState {
 #[derive(Debug)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 struct DhcpRequestState {
+    /// Client ID used for the transaction
+    client_id: Vec<u8, MAX_IDENTIFIER_LEN>,
     /// When to send next request
     retry_at: Instant,
     /// How many retries have been done
@@ -95,6 +99,8 @@ struct DhcpRenewState {
     /// Active network config
     config: Config<'static>,
 
+    /// Client ID used for the transaction
+    client_id: Vec<u8, MAX_IDENTIFIER_LEN>,
     /// The unique identifier for this IA_NA
     iaid: u32,
     /// Renew timer. When reached, we will start attempting
@@ -159,9 +165,6 @@ pub struct Socket<'a> {
     /// State of the DHCP client.
     state: ClientState,
 
-    /// Client ID used for the transaction
-    client_id: Vec<u8, MAX_IDENTIFIER_LEN>,
-
     /// Set to true on config/state change, cleared back to false by the `config` function.
     config_changed: bool,
     /// xid of the last sent message.
@@ -215,7 +218,6 @@ impl<'a> Socket<'a> {
                 retry_at: Instant::from_millis(0),
                 retry: 0,
             }),
-            client_id: Vec::new(),
             config_changed: true,
             transaction_id: 1,
             max_lease_duration: None,
@@ -310,7 +312,7 @@ impl<'a> Socket<'a> {
 
     pub(crate) fn process_icmpv6(
         &mut self,
-        _cx: &mut Context,
+        cx: &mut Context,
         ip_repr: &Ipv6Repr,
         repr: &Icmpv6Repr,
         payload: &[u8],
@@ -351,8 +353,12 @@ impl<'a> Socket<'a> {
                         }
                     };
                     if let Some(prefix_info) = prefix_info {
+                        let mut client_id = Vec::new();
+                        client_id.extend_from_slice(&cx.rand().rand_uuid()).ok();
+
                         self.state = ClientState::DhcpSolicit(
                             DhcpSolicitState {
+                                client_id,
                                 retry_at:Instant::from_millis(0),
                                 retry: 0,
                                 mtu: mtu,
@@ -414,9 +420,6 @@ impl<'a> Socket<'a> {
             panic!("using DHCPv6 socket with a non-ethernet hardware address.");
         };
 
-        if dhcp_repr.client_id != Some(self.client_id.as_ref()) {
-            return;
-        }
         if dhcp_repr.transaction_id != self.transaction_id {
             return;
         }
@@ -461,6 +464,17 @@ impl<'a> Socket<'a> {
                     net_debug!("DHCPv6 ignoring advertise because its missing addresses in the IA_NA section");
                     return;
                 }
+                match dhcp_repr.client_id {
+                    Some(s) if s.len() == state.client_id.len() && s == state.client_id => {},
+                    Some(_) => {
+                        net_debug!("DHCPv6 ignoring advertise because its missing client identifier does not match");
+                        return;
+                    }
+                    None => {
+                        net_debug!("DHCPv6 ignoring advertise because its missing a client identifier");
+                        return;
+                    }
+                };
                 let server_id = match dhcp_repr.server_id {
                     Some(s) => {
                         let mut id = Vec::new();
@@ -473,7 +487,11 @@ impl<'a> Socket<'a> {
                     }
                 };
 
+                let mut client_id = Vec::new();
+                client_id.extend_from_slice(&state.client_id).ok();
+
                 self.state = ClientState::DhcpRequesting(DhcpRequestState {
+                    client_id,
                     retry_at: cx.now(),
                     retry: 0,
                     server: ServerInfo {
@@ -490,7 +508,29 @@ impl<'a> Socket<'a> {
                 let ia_na = match &dhcp_repr.ia_na {
                     Some(i) => i,
                     None => {
-                        net_debug!("DHCPv6 ignoring advertise because its missing an IA_NA section");
+                        net_debug!("DHCPv6 ignoring confirm because its missing an IA_NA section");
+                        return;
+                    }
+                };
+                match dhcp_repr.client_id {
+                    Some(s) if s.len() == state.client_id.len() && s == state.client_id => {},
+                    Some(_) => {
+                        net_debug!("DHCPv6 ignoring confirm because its missing client identifier does not match");
+                        return;
+                    }
+                    None => {
+                        net_debug!("DHCPv6 ignoring confirm because its missing a client identifier");
+                        return;
+                    }
+                };
+                match dhcp_repr.server_id {
+                    Some(s) if s.len() == state.server.identifier.len() && s == state.server.identifier => {},
+                    Some(_) => {
+                        net_debug!("DHCPv6 ignoring confirm because its missing server identifier does not match");
+                        return;
+                    }
+                    None => {
+                        net_debug!("DHCPv6 ignoring confirm because its missing a server identifier");
                         return;
                     }
                 };
@@ -505,7 +545,11 @@ impl<'a> Socket<'a> {
                         &state.prefix_info
                     )
                 {
+                    let mut client_id = Vec::new();
+                    client_id.extend_from_slice(&state.client_id).ok();
+
                     self.state = ClientState::DhcpRenewing(DhcpRenewState {
+                        client_id,
                         iaid: state.iaid,
                         config,
                         renew_at,
@@ -526,6 +570,28 @@ impl<'a> Socket<'a> {
                     Some(i) => i,
                     None => {
                         net_debug!("DHCPv6 ignoring advertise because its missing an IA_NA section");
+                        return;
+                    }
+                };
+                match dhcp_repr.client_id {
+                    Some(s) if s.len() == state.client_id.len() && s == state.client_id => {},
+                    Some(_) => {
+                        net_debug!("DHCPv6 ignoring confirm because its missing client identifier does not match");
+                        return;
+                    }
+                    None => {
+                        net_debug!("DHCPv6 ignoring confirm because its missing a client identifier");
+                        return;
+                    }
+                };
+                match dhcp_repr.server_id {
+                    Some(s) if s.len() == state.config.server.identifier.len() && s == state.config.server.identifier => {},
+                    Some(_) => {
+                        net_debug!("DHCPv6 ignoring confirm because its missing server identifier does not match");
+                        return;
+                    }
+                    None => {
+                        net_debug!("DHCPv6 ignoring confirm because its missing a server identifier");
                         return;
                     }
                 };
