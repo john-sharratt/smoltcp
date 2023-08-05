@@ -16,6 +16,8 @@ use crate::time::Instant;
 
 #[cfg(feature = "socket-dhcpv4")]
 pub mod dhcpv4;
+#[cfg(feature = "socket-dhcpv6")]
+pub mod dhcpv6;
 #[cfg(feature = "socket-dns")]
 pub mod dns;
 #[cfg(feature = "socket-icmp")]
@@ -67,6 +69,8 @@ pub enum Socket<'a> {
     Tcp(tcp::Socket<'a>),
     #[cfg(feature = "socket-dhcpv4")]
     Dhcpv4(dhcpv4::Socket<'a>),
+    #[cfg(feature = "socket-dhcpv6")]
+    Dhcpv6(dhcpv6::Socket<'a>),
     #[cfg(feature = "socket-dns")]
     Dns(dns::Socket<'a>),
 }
@@ -84,6 +88,8 @@ impl<'a> Socket<'a> {
             Socket::Tcp(s) => s.poll_at(cx),
             #[cfg(feature = "socket-dhcpv4")]
             Socket::Dhcpv4(s) => s.poll_at(cx),
+            #[cfg(feature = "socket-dhcpv6")]
+            Socket::Dhcpv6(s) => s.poll_at(cx),
             #[cfg(feature = "socket-dns")]
             Socket::Dns(s) => s.poll_at(cx),
         }
@@ -137,5 +143,7 @@ from_socket!(udp::Socket<'a>, Udp);
 from_socket!(tcp::Socket<'a>, Tcp);
 #[cfg(feature = "socket-dhcpv4")]
 from_socket!(dhcpv4::Socket<'a>, Dhcpv4);
+#[cfg(feature = "socket-dhcpv6")]
+from_socket!(dhcpv6::Socket<'a>, Dhcpv6);
 #[cfg(feature = "socket-dns")]
 from_socket!(dns::Socket<'a>, Dns);

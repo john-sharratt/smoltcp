@@ -53,7 +53,31 @@ impl InterfaceInner {
         ip_payload: &'frame [u8],
     ) -> Option<IpPacket<'frame>> {
         match nxt_hdr {
-            IpProtocol::Icmpv6 => self.process_icmpv6(sockets, ipv6_repr.into(), ip_payload),
+            IpProtocol::Icmpv6 => {
+                let icmp_packet = check!(Icmpv6Packet::new_checked(ip_payload));
+                let icmp_repr = check!(Icmpv6Repr::parse(
+                    &ipv6_repr.src_addr.into(),
+                    &ipv6_repr.dst_addr.into(),
+                    &icmp_packet,
+                    &self.checksum_caps(),
+                ));
+                let icmp_payload = icmp_packet.payload();
+
+                #[cfg(feature = "socket-dhcpv6")]
+                {
+                    if let Some(dhcp_socket) = sockets
+                        .items_mut()
+                        .find_map(|i| crate::socket::dhcpv6::Socket::downcast_mut(&mut i.socket))
+                    {
+                        if icmp_packet.msg_type() == Icmpv6Message::RouterAdvert {
+                            dhcp_socket.process_icmpv6(self, &ipv6_repr, &icmp_repr, icmp_payload);
+                            return None;
+                        }
+                    }
+                }
+
+                self.process_icmpv6(sockets, ipv6_repr.into(), ip_payload)
+            },
 
             #[cfg(any(feature = "socket-udp", feature = "socket-dns"))]
             IpProtocol::Udp => {
@@ -64,6 +88,30 @@ impl InterfaceInner {
                     &ipv6_repr.dst_addr.into(),
                     &self.checksum_caps(),
                 ));
+
+                #[cfg(feature = "socket-dhcpv6")]
+                {
+                    if let Some(dhcp_socket) = sockets
+                        .items_mut()
+                        .find_map(|i| crate::socket::dhcpv6::Socket::downcast_mut(&mut i.socket))
+                    {
+                        if udp_packet.src_port() == dhcp_socket.server_port
+                            && udp_packet.dst_port() == dhcp_socket.client_port
+                        {
+                            let (src_addr, dst_addr) = (ipv6_repr.src_addr.into(), ipv6_repr.dst_addr.into());
+                            let udp_repr = check!(UdpRepr::parse(
+                                &udp_packet,
+                                &src_addr,
+                                &dst_addr,
+                                &self.caps.checksum
+                            ));
+                            let udp_payload = udp_packet.payload();
+
+                            dhcp_socket.process_udp(self, &ipv6_repr, &udp_repr, udp_payload);
+                            return None;
+                        }
+                    }
+                }
 
                 self.process_udp(
                     sockets,

@@ -354,6 +354,8 @@ pub(crate) enum IpPacket<'a> {
     Tcp((IpRepr, TcpRepr<'a>)),
     #[cfg(feature = "socket-dhcpv4")]
     Dhcpv4((Ipv4Repr, UdpRepr, DhcpRepr<'a>)),
+    #[cfg(feature = "socket-dhcpv6")]
+    Dhcpv6((Ipv6Repr, UdpRepr, Dhcpv6Repr<'a>)),
 }
 
 impl<'a> IpPacket<'a> {
@@ -373,6 +375,8 @@ impl<'a> IpPacket<'a> {
             IpPacket::Tcp((ip_repr, _)) => ip_repr.clone(),
             #[cfg(feature = "socket-dhcpv4")]
             IpPacket::Dhcpv4((ipv4_repr, _, _)) => IpRepr::Ipv4(*ipv4_repr),
+            #[cfg(feature = "socket-dhcpv6")]
+            IpPacket::Dhcpv6((ipv6_repr, _, _)) => IpRepr::Ipv6(*ipv6_repr),
         }
     }
 
@@ -443,6 +447,15 @@ impl<'a> IpPacket<'a> {
                 &_ip_repr.dst_addr(),
                 dhcp_repr.buffer_len(),
                 |buf| dhcp_repr.emit(&mut DhcpPacket::new_unchecked(buf)).unwrap(),
+                &caps.checksum,
+            ),
+            #[cfg(feature = "socket-dhcpv6")]
+            IpPacket::Dhcpv6((_, udp_repr, dhcp_repr)) => udp_repr.emit(
+                &mut UdpPacket::new_unchecked(payload),
+                &_ip_repr.src_addr(),
+                &_ip_repr.dst_addr(),
+                dhcp_repr.buffer_len(),
+                |buf| dhcp_repr.emit(&mut Dhcpv6Packet::new_unchecked(buf)).unwrap(),
                 &caps.checksum,
             ),
         }
@@ -996,6 +1009,15 @@ impl Interface {
                 #[cfg(feature = "socket-dhcpv4")]
                 Socket::Dhcpv4(socket) => socket.dispatch(&mut self.inner, |inner, response| {
                     respond(inner, IpPacket::Dhcpv4(response))
+                }),
+                #[cfg(feature = "socket-dhcpv6")]
+                Socket::Dhcpv6(socket) => socket.dispatch(&mut self.inner, |inner, response| {
+                    use crate::socket::dhcpv6::DispatchEmit;
+                    match response {
+                        DispatchEmit::Dhcp(ip, udp, dhcp) => respond(inner, IpPacket::Dhcpv6((ip, udp, dhcp))),
+                        DispatchEmit::Icmp(ip, icmp) => respond(inner, IpPacket::Icmpv6((ip, icmp))),
+                    }
+                    
                 }),
                 #[cfg(feature = "socket-dns")]
                 Socket::Dns(ref mut socket) => socket

@@ -1853,6 +1853,13 @@ impl<'a> Repr<'a> {
 
         Ok(())
     }
+
+    pub fn add_request_option(&mut self, option: u16) {
+        if self.request_options.is_none() {
+            self.request_options = Some(Vec::new());
+        }
+        self.request_options.as_mut().unwrap().push(option).ok();
+    }
 }
 
 impl<'a, T: AsRef<[u8]> + ?Sized> fmt::Display for Packet<&'a T> {
