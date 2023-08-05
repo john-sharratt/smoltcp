@@ -52,7 +52,9 @@ pub struct ServerInfo {
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 struct RouterSolicitState {
     /// When to send next request
-    retry_at: Instant,
+    retry_at: Instant,    
+    /// How many retries have been done
+    retry: u16,
 }
 
 #[derive(Debug)]
@@ -60,6 +62,8 @@ struct RouterSolicitState {
 struct DhcpSolicitState {
     /// When to send next request
     retry_at: Instant,
+    /// How many retries have been done
+    retry: u16,
     /// MTU of the network
     mtu: u32,
     /// Info about the prefix
@@ -71,10 +75,10 @@ struct DhcpSolicitState {
 struct DhcpRequestState {
     /// When to send next request
     retry_at: Instant,
-    /// The unique identifier for this IA_NA
-    iaid: u32,
     /// How many retries have been done
     retry: u16,
+    /// The unique identifier for this IA_NA
+    iaid: u32,
     /// Server we're trying to request from
     server: ServerInfo,
     /// IP address that we're trying to request.
@@ -124,7 +128,6 @@ enum ClientState {
 #[derive(Debug, PartialEq, Eq, Copy, Clone)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct RetryConfig {
-    pub discover_timeout: Duration,
     /// The REQUEST timeout doubles every 2 tries.
     pub initial_request_timeout: Duration,
     pub request_retries: u16,
@@ -134,8 +137,7 @@ pub struct RetryConfig {
 impl Default for RetryConfig {
     fn default() -> Self {
         Self {
-            discover_timeout: Duration::from_secs(10),
-            initial_request_timeout: Duration::from_secs(5),
+            initial_request_timeout: Duration::from_secs(2),
             request_retries: 5,
             min_renew_timeout: Duration::from_secs(60),
         }
@@ -211,6 +213,7 @@ impl<'a> Socket<'a> {
         Socket {
             state: ClientState::RouterSolicit(RouterSolicitState {
                 retry_at: Instant::from_millis(0),
+                retry: 0,
             }),
             client_id: Vec::new(),
             config_changed: true,
@@ -351,6 +354,7 @@ impl<'a> Socket<'a> {
                         self.state = ClientState::DhcpSolicit(
                             DhcpSolicitState {
                                 retry_at:Instant::from_millis(0),
+                                retry: 0,
                                 mtu: mtu,
                                 prefix_info: prefix_info.clone(),
                             }
@@ -688,6 +692,12 @@ impl<'a> Socket<'a> {
                     icmp_repr
                 );
                 emit(cx, DispatchEmit::Icmp(ipv6_repr, icmp_repr))?;
+
+                // Exponential backoff: Double every 2 retries, up to a maximum of 8 times.
+                state.retry_at = cx.now()
+                    + (self.retry_config.initial_request_timeout << (state.retry.min(16) as u32 / 2));
+                state.retry += 1;
+                self.transaction_id = next_transaction_id;
                 Ok(())
             }
             ClientState::DhcpSolicit(state) => {
@@ -704,8 +714,10 @@ impl<'a> Socket<'a> {
                 ipv6_repr.payload_len = udp_repr.header_len() + dhcp_repr.buffer_len();
                 emit(cx, DispatchEmit::Dhcp(ipv6_repr, udp_repr, dhcp_repr))?;
 
-                // Update state AFTER the packet has been successfully sent.
-                state.retry_at = cx.now() + self.retry_config.discover_timeout;
+                // Exponential backoff: Double every 2 retries, up to a maximum of 8 times.
+                state.retry_at = cx.now()
+                    + (self.retry_config.initial_request_timeout << (state.retry.min(16) as u32 / 2));
+                    state.retry += 1;
                 self.transaction_id = next_transaction_id;
                 Ok(())
             }
@@ -749,9 +761,9 @@ impl<'a> Socket<'a> {
                 ipv6_repr.payload_len = udp_repr.header_len() + dhcp_repr.buffer_len();
                 emit(cx, DispatchEmit::Dhcp(ipv6_repr, udp_repr, dhcp_repr))?;
 
-                // Exponential backoff: Double every 2 retries.
+                // Exponential backoff: Double every 2 retries, up to a maximum of 8 times.
                 state.retry_at = cx.now()
-                    + (self.retry_config.initial_request_timeout << (state.retry as u32 / 2));
+                    + (self.retry_config.initial_request_timeout << (state.retry.min(16) as u32 / 2));
                 state.retry += 1;
 
                 self.transaction_id = next_transaction_id;
@@ -807,7 +819,6 @@ impl<'a> Socket<'a> {
                         .retry_config
                         .min_renew_timeout
                         .max((state.expires_at - cx.now()) / 2);
-
                 self.transaction_id = next_transaction_id;
                 Ok(())
             }
@@ -825,6 +836,7 @@ impl<'a> Socket<'a> {
         }
         self.state = ClientState::RouterSolicit(RouterSolicitState {
             retry_at: Instant::from_millis(0),
+            retry: 0,
         });
     }
 
