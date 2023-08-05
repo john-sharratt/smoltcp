@@ -1603,6 +1603,7 @@ impl<T: AsRef<[u8]> + AsMut<[u8]>> Packet<T> {
     /// associate messages and responses between client and server. The number is chosen by
     /// the client.
     pub fn set_transaction_id(&mut self, value: u32) {
+        let value = value & 0xff_ffff;
         let field = &mut self.buffer.as_mut()[field::XID];
         NetworkEndian::write_u24(field, value)
     }
