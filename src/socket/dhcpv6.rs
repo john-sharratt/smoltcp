@@ -348,7 +348,7 @@ impl<'a> Socket<'a> {
                     let mtu = match mtu {
                         Some(m) => *m,
                         None => {
-                            net_debug!("ICMPv7 router advert ignored: missing MTU");
+                            net_debug!("ICMPv6 router advert ignored: missing MTU");
                             return;
                         }
                     };
@@ -372,6 +372,10 @@ impl<'a> Socket<'a> {
                     }
                     
                 } else {
+                    // Using auto-configuration instead which means there is no DHCPv6
+                    // server and we can just set the addresses directly
+
+
                     net_debug!(
                         "ICMPv6 router advert ignored: router is not managed"
                     );
@@ -793,7 +797,7 @@ impl<'a> Socket<'a> {
                 }
 
                 if state.retry >= self.retry_config.request_retries {
-                    net_debug!("DHCP request retries exceeded, restarting discovery");
+                    net_debug!("DHCPv6 request retries exceeded, restarting discovery");
                     drop(state);
                     drop(dhcp_repr);
 

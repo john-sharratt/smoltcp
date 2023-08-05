@@ -55,7 +55,7 @@ fn main() {
         match event {
             None => {}
             Some(dhcpv4::Event::Configured(config)) => {
-                debug!("DHCP config acquired!");
+                debug!("DHCPv4 config acquired!");
 
                 debug!("IP address:      {}", config.address);
                 set_ipv4_addr(&mut iface, config.address);
@@ -73,7 +73,7 @@ fn main() {
                 }
             }
             Some(dhcpv4::Event::Deconfigured) => {
-                debug!("DHCP lost config!");
+                debug!("DHCPv4 lost config!");
                 set_ipv4_addr(&mut iface, Ipv4Cidr::new(Ipv4Address::UNSPECIFIED, 0));
                 iface.routes_mut().remove_default_ipv4_route();
             }

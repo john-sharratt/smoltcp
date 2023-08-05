@@ -288,14 +288,14 @@ impl<'a> Socket<'a> {
         let dhcp_packet = match DhcpPacket::new_checked(payload) {
             Ok(dhcp_packet) => dhcp_packet,
             Err(e) => {
-                net_debug!("DHCP invalid pkt from {}: {:?}", src_ip, e);
+                net_debug!("DHCPv4 invalid pkt from {}: {:?}", src_ip, e);
                 return;
             }
         };
         let dhcp_repr = match DhcpRepr::parse(&dhcp_packet) {
             Ok(dhcp_repr) => dhcp_repr,
             Err(e) => {
-                net_debug!("DHCP error parsing pkt from {}: {:?}", src_ip, e);
+                net_debug!("DHCPv4 error parsing pkt from {}: {:?}", src_ip, e);
                 return;
             }
         };
@@ -314,7 +314,7 @@ impl<'a> Socket<'a> {
             Some(server_identifier) => server_identifier,
             None => {
                 net_debug!(
-                    "DHCP ignoring {:?} because missing server_identifier",
+                    "DHCPv4 ignoring {:?} because missing server_identifier",
                     dhcp_repr.message_type
                 );
                 return;
@@ -322,7 +322,7 @@ impl<'a> Socket<'a> {
         };
 
         net_debug!(
-            "DHCP recv {:?} from {}: {:?}",
+            "DHCPv4 recv {:?} from {}: {:?}",
             dhcp_repr.message_type,
             src_ip,
             dhcp_repr
@@ -338,7 +338,7 @@ impl<'a> Socket<'a> {
         match (&mut self.state, dhcp_repr.message_type) {
             (ClientState::Discovering(_state), DhcpMessageType::Offer) => {
                 if !dhcp_repr.your_ip.is_unicast() {
-                    net_debug!("DHCP ignoring OFFER because your_ip is not unicast");
+                    net_debug!("DHCPv4 ignoring OFFER because your_ip is not unicast");
                     return;
                 }
 
@@ -400,7 +400,7 @@ impl<'a> Socket<'a> {
             }
             _ => {
                 net_debug!(
-                    "DHCP ignoring {:?}: unexpected in current state",
+                    "DHCPv4 ignoring {:?}: unexpected in current state",
                     dhcp_repr.message_type
                 );
             }
@@ -416,7 +416,7 @@ impl<'a> Socket<'a> {
         let subnet_mask = match dhcp_repr.subnet_mask {
             Some(subnet_mask) => subnet_mask,
             None => {
-                net_debug!("DHCP ignoring ACK because missing subnet_mask");
+                net_debug!("DHCPv4 ignoring ACK because missing subnet_mask");
                 return None;
             }
         };
@@ -424,13 +424,13 @@ impl<'a> Socket<'a> {
         let prefix_len = match IpAddress::Ipv4(subnet_mask).prefix_len() {
             Some(prefix_len) => prefix_len,
             None => {
-                net_debug!("DHCP ignoring ACK because subnet_mask is not a valid mask");
+                net_debug!("DHCPv4 ignoring ACK because subnet_mask is not a valid mask");
                 return None;
             }
         };
 
         if !dhcp_repr.your_ip.is_unicast() {
-            net_debug!("DHCP ignoring ACK because your_ip is not unicast");
+            net_debug!("DHCPv4 ignoring ACK because your_ip is not unicast");
             return None;
         }
 
@@ -563,7 +563,7 @@ impl<'a> Socket<'a> {
 
                 // send packet
                 net_debug!(
-                    "DHCP send DISCOVER to {}: {:?}",
+                    "DHCPv4 send DISCOVER to {}: {:?}",
                     ipv4_repr.dst_addr,
                     dhcp_repr
                 );
@@ -581,7 +581,7 @@ impl<'a> Socket<'a> {
                 }
 
                 if state.retry >= self.retry_config.request_retries {
-                    net_debug!("DHCP request retries exceeded, restarting discovery");
+                    net_debug!("DHCPv4 request retries exceeded, restarting discovery");
                     self.reset();
                     return Ok(());
                 }
@@ -591,7 +591,7 @@ impl<'a> Socket<'a> {
                 dhcp_repr.server_identifier = Some(state.server.identifier);
 
                 net_debug!(
-                    "DHCP send request to {}: {:?}",
+                    "DHCPv4 send request to {}: {:?}",
                     ipv4_repr.dst_addr,
                     dhcp_repr
                 );
@@ -608,7 +608,7 @@ impl<'a> Socket<'a> {
             }
             ClientState::Renewing(state) => {
                 if state.expires_at <= cx.now() {
-                    net_debug!("DHCP lease expired");
+                    net_debug!("DHCPv4 lease expired");
                     self.reset();
                     // return Ok so we get polled again
                     return Ok(());
@@ -623,7 +623,7 @@ impl<'a> Socket<'a> {
                 dhcp_repr.message_type = DhcpMessageType::Request;
                 dhcp_repr.client_ip = state.config.address.address();
 
-                net_debug!("DHCP send renew to {}: {:?}", ipv4_repr.dst_addr, dhcp_repr);
+                net_debug!("DHCPv4 send renew to {}: {:?}", ipv4_repr.dst_addr, dhcp_repr);
                 ipv4_repr.payload_len = udp_repr.header_len() + dhcp_repr.buffer_len();
                 emit(cx, (ipv4_repr, udp_repr, dhcp_repr))?;
 
@@ -649,7 +649,7 @@ impl<'a> Socket<'a> {
     /// Use this to speed up acquisition of an address in a new
     /// network if a link was down and it is now back up.
     pub fn reset(&mut self) {
-        net_trace!("DHCP reset");
+        net_trace!("DHCPv4 reset");
         if let ClientState::Renewing(_) = &self.state {
             self.config_changed();
         }
