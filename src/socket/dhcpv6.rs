@@ -3,7 +3,7 @@ use core::task::Waker;
 
 use crate::iface::Context;
 use crate::time::{Duration, Instant};
-use crate::wire::dhcpv6;
+use crate::wire::dhcpv6::{self, StatusCode};
 use crate::wire::{
     Dhcpv6MessageType, Dhcpv6Packet, Dhcpv6Repr, IpProtocol, Ipv6Address, Ipv6Cidr, Ipv6Repr,
     UdpRepr, DHCPV6_CLIENT_PORT, DHCPV6_SERVER_PORT, DHCP_MAX_DNS_SERVER_COUNT,
@@ -651,9 +651,15 @@ impl<'a> Socket<'a> {
         let prefix_len = prefix_info.prefix_len;
 
         if ia_na.addresses.is_empty() {
-            net_debug!("DHCPv6 ignoring advertise because its missing addresses in the IA_NA section");
+            net_debug!("DHCPv6 ignoring confirm because its missing addresses in the IA_NA section");
             return None;
         }
+
+        if Some(StatusCode::Success) != ia_na.status_code.as_ref().map(|s| s.status_code) {
+            net_debug!("DHCPv6 ignoring confirm its status code is not success");
+            return None;
+        }
+
         let your_addr = ia_na.addresses.first().unwrap().addr;
 
         let mut lease_duration = Duration::from_secs(ia_na.t1 as u64);
@@ -820,6 +826,7 @@ impl<'a> Socket<'a> {
                     t1: 0,
                     t2: 0,
                     addresses,
+                    status_code: None,
                     additional_options: &[],
                 });
 
@@ -872,6 +879,7 @@ impl<'a> Socket<'a> {
                     t1: 0,
                     t2: 0,
                     addresses,
+                    status_code: None,
                     additional_options: &[],
                 });
 

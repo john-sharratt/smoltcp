@@ -1,5 +1,6 @@
 // See https://datatracker.ietf.org/doc/html/rfc8415 for the DHCPv6 specification.
 
+use alloc::borrow::Cow;
 use byteorder::{ByteOrder, NetworkEndian};
 use core::{iter, fmt};
 use heapless::Vec;
@@ -1919,6 +1920,8 @@ pub struct ReprIaNa<'a> {
     pub t2: u32,
     /// Addresses attached to this option
     pub addresses: Vec<ReprIaAddr<'a>, MAX_IA_ADDRESSES>,
+    /// Represents a status code applied to this IA
+    pub status_code: Option<ReprStatusCode<'a>>,
     /// Additional options
     pub additional_options: &'a [Dhcpv6Option<'a>],
 }
@@ -1931,6 +1934,9 @@ impl<'a> ReprIaNa<'a> {
         len += 4; // T2
         for addr in self.addresses.iter() {
             len += 4 + addr.data_len();
+        }
+        if let Some(status_code) = self.status_code.as_ref() {
+            len += 4 + status_code.data_len()
         }
         for opt in self.additional_options {
             len += 4 + opt.data.len()
@@ -1948,11 +1954,15 @@ impl<'a> ReprIaNa<'a> {
         data = &data[4..];
 
         let mut addresses = Vec::new();
+        let mut status_code = None;
         for option in parse_options(data) {
             let data = option.data;
             match (option.kind, data.len()) {
                 (field::OPT_IA_PD, _) => {
                     addresses.push(ReprIaAddr::parse(data)?).ok();
+                }
+                (field::OPT_STATUS_CODE, _) => {
+                    status_code = Some(ReprStatusCode::parse(data)?);
                 }
                 _ => {}
             }
@@ -1963,6 +1973,7 @@ impl<'a> ReprIaNa<'a> {
             t1,
             t2,
             addresses,
+            status_code,
             additional_options: &[],
         })
     }
@@ -1988,6 +1999,16 @@ impl<'a> ReprIaNa<'a> {
         // T2
         dhcp_options.buffer[0..4].copy_from_slice(&self.t2.to_be_bytes());
         dhcp_options.buffer = core::mem::take(&mut dhcp_options.buffer).split_at_mut(4).1;
+
+        // Addresses
+        for addr in self.addresses.iter() {
+            addr.emit(dhcp_options)?;
+        }
+
+        // Status code
+        if let Some(status_code) = self.status_code.as_ref() {
+            status_code.emit(dhcp_options)?;
+        }
         
         for opt in self.additional_options {
             dhcp_options.emit(*opt)?;
@@ -2017,6 +2038,8 @@ pub struct ReprIaTa<'a> {
     pub iaid: u32,
     /// Addresses attached to this option
     pub addresses: Vec<ReprIaAddr<'a>, MAX_IA_ADDRESSES>,
+    /// Represents a status code applied to this IA
+    pub status_code: Option<ReprStatusCode<'a>>,
     /// Additional options
     pub additional_options: &'a [Dhcpv6Option<'a>],
 }
@@ -2027,6 +2050,9 @@ impl<'a> ReprIaTa<'a> {
         len += 4; // IAID
         for addr in self.addresses.iter() {
             len += 4 + addr.data_len();
+        }
+        if let Some(status_code) = self.status_code.as_ref() {
+            len += 4 + status_code.data_len()
         }
         for opt in self.additional_options {
             len += 4 + opt.data.len()
@@ -2040,11 +2066,15 @@ impl<'a> ReprIaTa<'a> {
         data = &data[4..];
         
         let mut addresses = Vec::new();
+        let mut status_code = None;
         for option in parse_options(data) {
             let data = option.data;
             match (option.kind, data.len()) {
                 (field::OPT_IA_PD, _) => {
                     addresses.push(ReprIaAddr::parse(data)?).ok();
+                }
+                (field::OPT_STATUS_CODE, _) => {
+                    status_code = Some(ReprStatusCode::parse(data)?);
                 }
                 _ => {}
             }
@@ -2053,6 +2083,7 @@ impl<'a> ReprIaTa<'a> {
         Ok(Self {
             iaid,
             addresses,
+            status_code,
             additional_options: &[],
         })
     }
@@ -2070,6 +2101,16 @@ impl<'a> ReprIaTa<'a> {
         // IAID
         dhcp_options.buffer[0..4].copy_from_slice(&self.iaid.to_be_bytes());
         dhcp_options.buffer = core::mem::take(&mut dhcp_options.buffer).split_at_mut(4).1;
+
+        // Addresses
+        for addr in self.addresses.iter() {
+            addr.emit(dhcp_options)?;
+        }
+
+        // Status code
+        if let Some(status_code) = self.status_code.as_ref() {
+            status_code.emit(dhcp_options)?;
+        }
         
         for opt in self.additional_options {
             dhcp_options.emit(*opt)?;
@@ -2191,6 +2232,104 @@ impl<'a> fmt::Display for ReprIaAddr<'a> {
             self.addr,
             self.preferred_lifetime,
             self.valid_lifetime)?;
+        Ok(())
+    }
+}
+
+enum_with_unknown! {
+    pub enum StatusCode(u16) {
+        Success = 0,
+        UnspecFail = 1,
+        NoAddrsAvail = 2,
+        NoBinding = 3,
+        NotOnLink = 4,
+        UseMulticast = 5,
+        NoPrefixAvail = 6
+    }
+}
+
+impl fmt::Display for StatusCode {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match *self {
+            Self::Success => write!(f, "success"),
+            Self::UnspecFail => write!(f, "unspec-fail"),
+            Self::NoAddrsAvail => write!(f, "no-addrs-avail"),
+            Self::NoBinding => write!(f, "no-binding"),
+            Self::NotOnLink => write!(f, "not-on-link"),
+            Self::UseMulticast => write!(f, "use-multicast"),
+            Self::NoPrefixAvail => write!(f, "no-prefix-avail"),
+            Self::Unknown(a) => write!(f, "unknown({a})"),
+        }
+    }
+}
+
+//     0                   1                   2                   3
+//     0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+//    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+//    |       OPTION_STATUS_CODE      |         option-len            |
+//    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+//    |          status-code          |                               |
+//    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+                               |
+//    .                                                               .
+//    .                        status-message                         .
+//    .                                                               .
+//    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+#[derive(Debug, PartialEq, Eq, Clone)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+pub struct ReprStatusCode<'a> {
+    pub status_code: StatusCode,
+    pub status_message: Cow<'a, str>,
+}
+
+impl<'a> ReprStatusCode<'a> {
+    pub fn data_len(&self) -> usize {
+        let mut len = 0;
+        len += 2;   // status-code
+        len += self.status_message.as_bytes().len();
+        len
+    }
+
+    pub fn parse(data: &'a [u8]) -> Result<Self>
+    {
+        if data.len() < 2 {
+            return Err(Error);
+        }
+        let status_code = u16::from_be_bytes([data[0], data[1]]);
+
+        Ok(Self {
+            status_code: StatusCode::from(status_code),
+            status_message: String::from_utf8_lossy(&data[2..])
+        })
+    }
+
+    pub fn emit(&self, dhcp_options: &mut Dhcpv6OptionWriter<'a>) -> Result<()>
+    {
+        // OPT TYPE
+        NetworkEndian::write_u16(&mut dhcp_options.buffer[0..2], field::OPT_STATUS_CODE);
+        dhcp_options.buffer = core::mem::take(&mut dhcp_options.buffer).split_at_mut(2).1;
+
+        // OPT LEN
+        NetworkEndian::write_u16(&mut dhcp_options.buffer[0..2], self.data_len() as u16);
+        dhcp_options.buffer = core::mem::take(&mut dhcp_options.buffer).split_at_mut(2).1;
+
+        // Status code
+        let status_code: u16 = self.status_code.into();
+        dhcp_options.buffer[0..2].copy_from_slice(&status_code.to_be_bytes());
+        dhcp_options.buffer = core::mem::take(&mut dhcp_options.buffer).split_at_mut(2).1;
+
+        // Status message
+        dhcp_options.buffer[2..].copy_from_slice(self.status_message.as_bytes());
+        dhcp_options.buffer = core::mem::take(&mut dhcp_options.buffer).split_at_mut(self.status_message.as_bytes().len()).1;
+
+        Ok(())
+    }
+}
+
+impl<'a> fmt::Display for ReprStatusCode<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}(msg='{}')",
+            self.status_code,
+            self.status_message,)?;
         Ok(())
     }
 }
