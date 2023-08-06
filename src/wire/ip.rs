@@ -826,31 +826,7 @@ pub fn pretty_print_ip_payload<T: Into<Repr>>(
         }
         Protocol::Udp => {
             indent.increase(f)?;
-            match UdpPacket::<&[u8]>::new_checked(payload) {
-                Err(err) => write!(f, "{indent}({err})"),
-                Ok(udp_packet) => {
-                    match UdpRepr::parse(
-                        &udp_packet,
-                        &repr.src_addr(),
-                        &repr.dst_addr(),
-                        &checksum_caps,
-                    ) {
-                        Err(err) => write!(f, "{indent}{udp_packet} ({err})"),
-                        Ok(udp_repr) => {
-                            write!(
-                                f,
-                                "{}{} len={}",
-                                indent,
-                                udp_repr,
-                                udp_packet.payload().len()
-                            )?;
-                            let valid =
-                                udp_packet.verify_checksum(&repr.src_addr(), &repr.dst_addr());
-                            format_checksum(f, valid)
-                        }
-                    }
-                }
-            }
+            super::UdpPacket::<&[u8]>::pretty_print(&payload, f, indent)
         }
         Protocol::Tcp => {
             indent.increase(f)?;
