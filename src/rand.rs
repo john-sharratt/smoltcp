@@ -44,6 +44,23 @@ impl Rand {
     }
 
     pub(crate) fn rand_uuid(&mut self) -> [u8; 16] {
-        [self.rand_u8(); 16]
+        [
+            self.rand_u8(),
+            self.rand_u8(),
+            self.rand_u8(),
+            self.rand_u8(),
+            self.rand_u8(),
+            self.rand_u8(),
+            self.rand_u8(),
+            self.rand_u8(),
+            self.rand_u8(),
+            self.rand_u8(),
+            self.rand_u8(),
+            self.rand_u8(),
+            self.rand_u8(),
+            self.rand_u8(),
+            self.rand_u8(),
+            self.rand_u8()
+        ]
     }
 }

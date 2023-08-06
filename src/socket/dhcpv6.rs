@@ -788,6 +788,8 @@ impl<'a> Socket<'a> {
                     return Ok(());
                 }
 
+                dhcp_repr.client_id = Some(&state.client_id);
+
                 // send packet
                 net_debug!(
                     "DHCPv6 send solicit to {}: {:?}",
@@ -827,6 +829,7 @@ impl<'a> Socket<'a> {
                 }).ok();
 
                 dhcp_repr.message_type = Dhcpv6MessageType::Request;
+                dhcp_repr.client_id = Some(&state.client_id);
                 dhcp_repr.server_id = Some(&state.server.identifier);
                 dhcp_repr.ia_na = Some(Dhcpv6ReprIaNa {
                     iaid: state.iaid,
@@ -879,7 +882,7 @@ impl<'a> Socket<'a> {
                 ipv6_repr.src_addr = state.config.address.address();
                 ipv6_repr.dst_addr = state.config.server.address;
                 dhcp_repr.message_type = Dhcpv6MessageType::Request;
-                
+                dhcp_repr.client_id = Some(&state.client_id);
                 dhcp_repr.server_id = Some(&state.config.server.identifier);
                 dhcp_repr.ia_na = Some(Dhcpv6ReprIaNa {
                     iaid: state.iaid,
