@@ -2318,8 +2318,9 @@ impl<'a> ReprStatusCode<'a> {
         dhcp_options.buffer = core::mem::take(&mut dhcp_options.buffer).split_at_mut(2).1;
 
         // Status message
-        dhcp_options.buffer[2..].copy_from_slice(self.status_message.as_bytes());
-        dhcp_options.buffer = core::mem::take(&mut dhcp_options.buffer).split_at_mut(self.status_message.as_bytes().len()).1;
+        let len = self.status_message.as_bytes().len();
+        dhcp_options.buffer[0..len].copy_from_slice(self.status_message.as_bytes());
+        dhcp_options.buffer = core::mem::take(&mut dhcp_options.buffer).split_at_mut(len).1;
 
         Ok(())
     }
