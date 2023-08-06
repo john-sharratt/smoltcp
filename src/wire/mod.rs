@@ -257,7 +257,7 @@ pub use self::dhcpv6::{
     Dhcpv6Option, Dhcpv6OptionWriter, MessageType as Dhcpv6MessageType, Packet as Dhcpv6Packet,
     Repr as Dhcpv6Repr, CLIENT_PORT as DHCPV6_CLIENT_PORT,
     ReprIaNa as Dhcpv6ReprIaNa, ReprIaTa as Dhcpv6ReprIaTa, ReprIaAddr as Dhcpv6ReprIaAddr,
-    ReprDnsServers as Dhcpv6ReprDnsServers, ReprStatusCode as Dhcpv6ReprStatusCode,
+    ReprDnsServers as Dhcpv6ReprDnsServers, ReprStatusCode as Dhcpv6ReprStatusCode, StatusCode as Dhcpv6StatusCode,
     MAX_REQUEST_OPTIONS as DHCPV6_MAX_REQUEST_OPTIONS, SERVER_PORT as DHCPV6_SERVER_PORT,
     MAX_DNS_ADDRESSES as DHCPV6_MAX_DNS_ADDRESSES, MAX_IA_ADDRESSES as DHCPV6_MAX_IA_ADDRESSES,
 };
