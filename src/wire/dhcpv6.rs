@@ -2373,7 +2373,7 @@ impl ReprDnsServers {
     pub fn emit<'a>(&self, dhcp_options: &mut Dhcpv6OptionWriter<'a>) -> Result<()>
     {
         // OPT TYPE
-        NetworkEndian::write_u16(&mut dhcp_options.buffer[0..2], field::OPT_IA_TA);
+        NetworkEndian::write_u16(&mut dhcp_options.buffer[0..2], field::OPT_DNS_SERVERS);
         dhcp_options.buffer = core::mem::take(&mut dhcp_options.buffer).split_at_mut(2).1;
 
         // OPT LEN
