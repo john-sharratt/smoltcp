@@ -810,7 +810,7 @@ pub fn pretty_print_ip_payload<T: Into<Repr>>(
     use crate::wire::ip::checksum::format_checksum;
     #[cfg(feature = "proto-ipv4")]
     use crate::wire::{Icmpv4Packet, Icmpv6Packet};
-    use crate::wire::{TcpPacket, TcpRepr, UdpPacket, UdpRepr};
+    use crate::wire::{TcpPacket, TcpRepr};
 
     let checksum_caps = ChecksumCapabilities::ignored();
     let repr = ip_repr.into();
