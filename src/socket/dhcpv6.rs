@@ -168,6 +168,7 @@ pub struct Socket<'a> {
     /// Set to true on config/state change, cleared back to false by the `config` function.
     config_changed: bool,
     /// xid of the last sent message.
+    /// Note: Only the first 24bits of the transaction ID are actually used
     transaction_id: u32,
 
     /// Max lease duration. If set, it sets a maximum cap to the server-provided lease duration.
@@ -721,7 +722,7 @@ impl<'a> Socket<'a> {
 
         // We don't directly modify self.transaction_id because sending the packet
         // may fail. We only want to update state after succesfully sending.
-        let next_transaction_id = Self::random_transaction_id(cx);
+        let next_transaction_id = Self::random_transaction_id(cx) & 0xff_ffff;
 
         let mut dhcp_repr = Dhcpv6Repr {
             message_type: Dhcpv6MessageType::Solicit,

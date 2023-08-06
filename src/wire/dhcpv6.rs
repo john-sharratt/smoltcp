@@ -1662,6 +1662,7 @@ pub struct Repr<'a> {
     /// This field is also known as `xid` in the RFC. It is a random number chosen by the client,
     /// used by the client and server to associate messages and responses between a client and a
     /// server.
+    /// Note: Only the first 24bits of this ID are actually used
     pub transaction_id: u32,
     /// This field represents the client ID
     pub client_id: Option<&'a [u8]>,
