@@ -360,6 +360,11 @@ pub fn pretty_print_udp_payload<T: Into<Repr>>(
         return crate::wire::Dhcpv6Packet::<&[u8]>::pretty_print(&payload, f, indent);
     }
 
+    write!(
+        f,
+        " len={}",
+        payload.len()
+    )?;
     Ok(())
 }
 

@@ -259,7 +259,7 @@ pub use self::dhcpv6::{
     ReprIaNa as Dhcpv6ReprIaNa, ReprIaTa as Dhcpv6ReprIaTa, ReprIaAddr as Dhcpv6ReprIaAddr,
     ReprDnsServers as Dhcpv6ReprDnsServers,
     MAX_REQUEST_OPTIONS as DHCPV6_MAX_REQUEST_OPTIONS, SERVER_PORT as DHCPV6_SERVER_PORT,
-    MAX_DNS_ADDRESSES as DHCPV6_MAX_DNS_ADDRESSES,
+    MAX_DNS_ADDRESSES as DHCPV6_MAX_DNS_ADDRESSES, MAX_IA_ADDRESSES as DHCPV6_MAX_IA_ADDRESSES,
 };
 
 #[cfg(feature = "proto-dns")]
