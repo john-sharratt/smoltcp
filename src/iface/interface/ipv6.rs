@@ -54,32 +54,10 @@ impl InterfaceInner {
     ) -> Option<IpPacket<'frame>> {
         match nxt_hdr {
             IpProtocol::Icmpv6 => {
-                let icmp_packet = check!(Icmpv6Packet::new_checked(ip_payload));
-                let icmp_repr = check!(Icmpv6Repr::parse(
-                    &ipv6_repr.src_addr.into(),
-                    &ipv6_repr.dst_addr.into(),
-                    &icmp_packet,
-                    &self.checksum_caps(),
-                ));
-                let icmp_payload = icmp_packet.payload();
-
-                #[cfg(feature = "socket-dhcpv6")]
-                {
-                    if let Some(dhcp_socket) = sockets
-                        .items_mut()
-                        .find_map(|i| crate::socket::dhcpv6::Socket::downcast_mut(&mut i.socket))
-                    {
-                        if icmp_packet.msg_type() == Icmpv6Message::RouterAdvert {
-                            dhcp_socket.process_icmpv6(self, &ipv6_repr, &icmp_repr, icmp_payload);
-                            return None;
-                        }
-                    }
-                }
-
                 self.process_icmpv6(sockets, ipv6_repr.into(), ip_payload)
             },
 
-            #[cfg(any(feature = "socket-udp", feature = "socket-dns"))]
+            #[cfg(any(feature = "socket-udp", feature = "socket-dns", feature = "socket-dhcpv6"))]
             IpProtocol::Udp => {
                 let udp_packet = check!(UdpPacket::new_checked(ip_payload));
                 let udp_repr = check!(UdpRepr::parse(
@@ -88,30 +66,6 @@ impl InterfaceInner {
                     &ipv6_repr.dst_addr.into(),
                     &self.checksum_caps(),
                 ));
-
-                #[cfg(feature = "socket-dhcpv6")]
-                {
-                    if let Some(dhcp_socket) = sockets
-                        .items_mut()
-                        .find_map(|i| crate::socket::dhcpv6::Socket::downcast_mut(&mut i.socket))
-                    {
-                        if udp_packet.src_port() == dhcp_socket.server_port
-                            && udp_packet.dst_port() == dhcp_socket.client_port
-                        {
-                            let (src_addr, dst_addr) = (ipv6_repr.src_addr.into(), ipv6_repr.dst_addr.into());
-                            let udp_repr = check!(UdpRepr::parse(
-                                &udp_packet,
-                                &src_addr,
-                                &dst_addr,
-                                &self.caps.checksum
-                            ));
-                            let udp_payload = udp_packet.payload();
-
-                            dhcp_socket.process_udp(self, &ipv6_repr, &udp_repr, udp_payload);
-                            return None;
-                        }
-                    }
-                }
 
                 self.process_udp(
                     sockets,
@@ -155,7 +109,7 @@ impl InterfaceInner {
     #[cfg(feature = "proto-ipv6")]
     pub(super) fn process_icmpv6<'frame>(
         &mut self,
-        _sockets: &mut SocketSet,
+        sockets: &mut SocketSet,
         ip_repr: IpRepr,
         ip_payload: &'frame [u8],
     ) -> Option<IpPacket<'frame>> {
@@ -166,12 +120,32 @@ impl InterfaceInner {
             &icmp_packet,
             &self.caps.checksum,
         ));
+        let icmp_payload = icmp_packet.payload();
+
+        #[cfg(feature = "socket-dhcpv6")]
+        {
+            if let Some(dhcp_socket) = sockets
+                .items_mut()
+                .find_map(|i| crate::socket::dhcpv6::Socket::downcast_mut(&mut i.socket))
+            {
+                if icmp_packet.msg_type() == Icmpv6Message::RouterAdvert {
+                    if let IpRepr::Ipv6(ipv6_repr) = ip_repr {
+                        dhcp_socket.process_icmpv6(self, &ipv6_repr, &icmp_repr, icmp_payload);
+                        return None;
+                    } else {
+                        net_trace!("ignoring IPv4 packet sent with ICMPv6 payload");
+                        return None;
+                    }
+                    
+                }
+            }
+        }
 
         #[cfg(feature = "socket-icmp")]
         let mut handled_by_icmp_socket = false;
 
         #[cfg(all(feature = "socket-icmp", feature = "proto-ipv6"))]
-        for icmp_socket in _sockets
+        for icmp_socket in sockets
             .items_mut()
             .filter_map(|i| icmp::Socket::downcast_mut(&mut i.socket))
         {

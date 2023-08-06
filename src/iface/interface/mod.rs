@@ -1437,7 +1437,7 @@ impl InterfaceInner {
         address.is_unicast() && !self.is_subnet_broadcast(address)
     }
 
-    #[cfg(any(feature = "socket-udp", feature = "socket-dns"))]
+    #[cfg(any(feature = "socket-udp", feature = "socket-dns", feature = "socket-dhcpv6"))]
     fn process_udp<'frame>(
         &mut self,
         sockets: &mut SocketSet,
@@ -1447,6 +1447,26 @@ impl InterfaceInner {
         udp_payload: &'frame [u8],
         ip_payload: &'frame [u8],
     ) -> Option<IpPacket<'frame>> {
+        #[cfg(all(feature = "socket-dhcpv6", feature = "proto-ipv6"))]
+        {
+            if let Some(dhcp_socket) = sockets
+                .items_mut()
+                .find_map(|i| crate::socket::dhcpv6::Socket::downcast_mut(&mut i.socket))
+            {
+                if udp_repr.src_port == dhcp_socket.server_port
+                    && udp_repr.dst_port == dhcp_socket.client_port
+                {
+                    if let IpRepr::Ipv6(ipv6_repr) = ip_repr {
+                        dhcp_socket.process_udp(self, &ipv6_repr, &udp_repr, udp_payload);
+                        return None;
+                    } else {
+                        net_trace!("ignoring IPv4 packet sent to DHCPv6 ports");
+                        return None;
+                    }
+                }
+            }
+        }
+
         #[cfg(feature = "socket-udp")]
         for udp_socket in sockets
             .items_mut()
