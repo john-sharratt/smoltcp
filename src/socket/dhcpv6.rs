@@ -537,7 +537,7 @@ impl<'a> Socket<'a> {
                 match dhcp_repr.server_id {
                     Some(s) if s.len() == state.server.identifier.len() && s == state.server.identifier => {},
                     Some(s) => {
-                        net_debug!("DHCPv6 ignoring confirm because its server identifier does not match (expected={:?} actual={:?}", &state.config.server.identifier, s);
+                        net_debug!("DHCPv6 ignoring confirm because its server identifier does not match (expected={:?} actual={:?}", &state.server.identifier, s);
                         return;
                     }
                     None => {
