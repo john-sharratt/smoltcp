@@ -655,7 +655,7 @@ impl<'a> Socket<'a> {
             return None;
         }
 
-        if Some(StatusCode::Success) != ia_na.status_code.as_ref().map(|s| s.status_code) {
+        if StatusCode::Success != ia_na.status_code.as_ref().map(|s| s.status_code).unwrap_or(StatusCode::Success) {
             net_debug!("DHCPv6 ignoring confirm its status code is not success");
             return None;
         }
