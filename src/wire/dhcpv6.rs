@@ -1897,10 +1897,10 @@ impl<'a> fmt::Display for Repr<'a> {
             }
         }
         if let Some(ia_na) = self.ia_na.as_ref() {
-            write!(f, " ia-na {ia_na}")?;
+            write!(f, " {ia_na}")?;
         }
         if let Some(ia_ta) = self.ia_ta.as_ref() {
-            write!(f, " ia-na {ia_ta}")?;
+            write!(f, " {ia_ta}")?;
         }
         if let Some(dns_servers) = self.dns_servers.as_ref() {
             write!(f, " dns-servers {dns_servers}")?;
