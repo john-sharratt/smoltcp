@@ -2023,9 +2023,12 @@ impl<'a> fmt::Display for ReprIaNa<'a> {
         write!(f, "ia-na iaid={} t1={} t2={}",
             self.iaid,
             self.t1,
-            self.t2)?;        
+            self.t2)?;
         for addr in self.addresses.iter() {
             write!(f, " addr={}", addr)?;
+        }
+        if let Some(s) = self.status_code.as_ref() {
+            write!(f, " status={}(msg='{}')", s.status_code, s.status_message)?;
         }
         Ok(())
     }
@@ -2126,6 +2129,9 @@ impl<'a> fmt::Display for ReprIaTa<'a> {
             self.iaid)?;        
         for addr in self.addresses.iter() {
             write!(f, " addr={}", addr)?;
+        }
+        if let Some(s) = self.status_code.as_ref() {
+            write!(f, " status={}(msg='{}')", s.status_code, s.status_message)?;
         }
         Ok(())
     }
