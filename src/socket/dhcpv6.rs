@@ -425,6 +425,12 @@ impl<'a> Socket<'a> {
         };
 
         if dhcp_repr.transaction_id != self.transaction_id {
+            net_debug!(
+                "DHCPv6 ignoring {:?} because the transaction_id does not match ({} vs {})",
+                dhcp_repr.message_type,
+                dhcp_repr.transaction_id,
+                self.transaction_id
+            );
             return;
         }
         let _server_identifier = match dhcp_repr.server_id {
