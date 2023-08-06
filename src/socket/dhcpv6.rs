@@ -477,8 +477,8 @@ impl<'a> Socket<'a> {
                 }
                 match dhcp_repr.client_id {
                     Some(s) if s.len() == state.client_id.len() && s == state.client_id => {},
-                    Some(_) => {
-                        net_debug!("DHCPv6 ignoring advertise because its client identifier does not match");
+                    Some(s) => {
+                        net_debug!("DHCPv6 ignoring advertise because its client identifier does not match (expected={:?} actual={:?})", &state.client_id, s);
                         return;
                     }
                     None => {
@@ -525,8 +525,8 @@ impl<'a> Socket<'a> {
                 };
                 match dhcp_repr.client_id {
                     Some(s) if s.len() == state.client_id.len() && s == state.client_id => {},
-                    Some(_) => {
-                        net_debug!("DHCPv6 ignoring confirm because its client identifier does not match");
+                    Some(s) => {
+                        net_debug!("DHCPv6 ignoring confirm because its client identifier does not match (expected={:?} actual={:?})", &state.client_id, s);
                         return;
                     }
                     None => {
@@ -536,8 +536,8 @@ impl<'a> Socket<'a> {
                 };
                 match dhcp_repr.server_id {
                     Some(s) if s.len() == state.server.identifier.len() && s == state.server.identifier => {},
-                    Some(_) => {
-                        net_debug!("DHCPv6 ignoring confirm because its missing server identifier does not match");
+                    Some(s) => {
+                        net_debug!("DHCPv6 ignoring confirm because its server identifier does not match (expected={:?} actual={:?}", &state.config.server.identifier, s);
                         return;
                     }
                     None => {
