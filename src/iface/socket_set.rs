@@ -58,11 +58,22 @@ impl<'a> SocketSet<'a> {
     /// # Panics
     /// This function panics if the storage is fixed-size (not a `Vec`) and is full.
     pub fn add<T: AnySocket<'a>>(&mut self, socket: T) -> SocketHandle {
-        fn put<'a>(index: usize, slot: &mut SocketStorage<'a>, socket: Socket<'a>) -> SocketHandle {
+        self.add_ext(socket, false)
+    }
+
+    /// Add a socket to the set, with the possibility to adjust the metadata, and return its handle.
+    ///
+    /// # Panics
+    /// This function panics if the storage is fixed-size (not a `Vec`) and is full.
+    pub fn add_ext<T: AnySocket<'a>>(&mut self, socket: T, non_blocking: bool) -> SocketHandle
+    {
+        fn put<'a, D>(index: usize, slot: &mut SocketStorage<'a>, socket: Socket<'a>, meta_func: D) -> SocketHandle
+        where D: FnOnce(&mut Meta) {
             net_trace!("[{}]: adding", index);
             let handle = SocketHandle(index);
             let mut meta = Meta::default();
             meta.handle = handle;
+            meta_func(&mut meta);
             *slot = SocketStorage {
                 inner: Some(Item { meta, socket }),
             };
@@ -71,9 +82,13 @@ impl<'a> SocketSet<'a> {
 
         let socket = socket.upcast();
 
+        let meta_func = |meta: &mut Meta| {
+            meta.set_non_blocking(non_blocking);
+        };
+
         for (index, slot) in self.sockets.iter_mut().enumerate() {
             if slot.inner.is_none() {
-                return put(index, slot, socket);
+                return put(index, slot, socket, meta_func);
             }
         }
 
@@ -83,7 +98,7 @@ impl<'a> SocketSet<'a> {
             ManagedSlice::Owned(ref mut sockets) => {
                 sockets.push(SocketStorage { inner: None });
                 let index = sockets.len() - 1;
-                put(index, &mut sockets[index], socket)
+                put(index, &mut sockets[index], socket, meta_func)
             }
         }
     }

@@ -41,6 +41,10 @@ pub(crate) struct Meta {
     pub(crate) handle: SocketHandle,
     /// See [NeighborState](struct.NeighborState.html).
     neighbor_state: NeighborState,
+    /// Indicates if the socket is a non-blocking socket and thus
+    /// neighbor discovery will not prevent packets from going out
+    /// and clearing down the tx queue
+    non_blocking: bool,
 }
 
 impl Meta {
@@ -49,6 +53,12 @@ impl Meta {
     ///
     /// See also `iface::NeighborCache::SILENT_TIME`.
     pub(crate) const DISCOVERY_SILENT_TIME: Duration = Duration::from_millis(1_000);
+
+    /// Sets a flag that will causing the socket to go into non-blocking mode which
+    /// means neighbor discovery does not prevent the drawdown of the tx queue
+    pub(crate) fn set_non_blocking(&mut self, val: bool) {
+        self.non_blocking = val;
+    }
 
     pub(crate) fn poll_at<F>(&self, socket_poll_at: PollAt, has_neighbor: F) -> PollAt
     where
@@ -85,6 +95,9 @@ impl Meta {
                         self.handle,
                         neighbor
                     );
+                    if self.non_blocking {
+                        return false;
+                    }
                     true
                 } else {
                     false
