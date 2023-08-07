@@ -8,7 +8,7 @@ use crate::socket::PollAt;
 use crate::socket::WakerRegistration;
 
 use crate::storage::Empty;
-use crate::wire::{IpProtocol, IpRepr, IpVersion};
+use crate::wire::{IpProtocol, IpRepr, IpVersion, IpAddress, Error};
 #[cfg(feature = "proto-ipv4")]
 use crate::wire::{Ipv4Packet, Ipv4Repr};
 #[cfg(feature = "proto-ipv6")]
@@ -56,6 +56,7 @@ pub struct Socket<'a> {
     rx_waker: WakerRegistration,
     #[cfg(feature = "async")]
     tx_waker: WakerRegistration,
+    neighbor_discovering: Option<IpAddress>,
 }
 
 impl<'a> Socket<'a> {
@@ -76,6 +77,7 @@ impl<'a> Socket<'a> {
             rx_waker: WakerRegistration::new(),
             #[cfg(feature = "async")]
             tx_waker: WakerRegistration::new(),
+            neighbor_discovering: None,
         }
     }
     /// Create a raw IP socket bound to the given IP version and datagram protocol,
@@ -93,6 +95,7 @@ impl<'a> Socket<'a> {
             rx_waker: WakerRegistration::new(),
             #[cfg(feature = "async")]
             tx_waker: WakerRegistration::new(),
+            neighbor_discovering: None,
         }
     }
 
@@ -229,6 +232,54 @@ impl<'a> Socket<'a> {
         self.tx_buffer.payload_capacity()
     }
 
+    /// Flag that determines if the TX queue should block while its performing
+    /// a neighbor discovery
+    #[inline]
+    pub(crate) fn wait_on_neighbor_discovery(&self) -> bool {
+        self.neighbor_discovering.is_some()
+    }
+
+    /// Clears the should rediscover flag
+    #[inline]
+    pub(crate) fn set_neighbor_discovering(&mut self, neighbor_addr: crate::wire::IpAddress) {
+        self.neighbor_discovering = Some(neighbor_addr);
+    }
+
+    /// This function purges any active neighbor discovery actions going on so
+    /// that it can send new ones. Without this being called then neighbor discovery
+    /// can block all outbound packets
+    #[inline]
+    fn purge_neighbor_discovery(&mut self) {
+        if let Some(neighbor_discovering) = self.neighbor_discovering.take()
+        {
+            // Purge the tx buffer with any packets that are waiting on this discovery
+            // which will in effect cause packet loss for undiscovered endpoints but it
+            // will free up the TX queue so that other packets may be transmitted as
+            // otherwise neighbor discovery blocks the TX queue on the dispatch code path
+            self.tx_buffer.dequeue_with(|_, buffer| {
+                match IpVersion::of_packet(buffer) {
+                    #[cfg(feature = "proto-ipv4")]
+                    Ok(IpVersion::Ipv4) => {
+                        Ipv4Packet::new_checked(buffer)
+                            .and_then(|frame| match IpAddress::Ipv4(frame.dst_addr()) == neighbor_discovering {
+                                true => Ok(()),
+                                false => Err(Error)
+                            })
+                    }
+                    #[cfg(feature = "proto-ipv6")]
+                    Ok(IpVersion::Ipv6) => {
+                        Ipv6Packet::new_checked(buffer)
+                            .and_then(|frame| match IpAddress::Ipv6(frame.dst_addr()) == neighbor_discovering {
+                                true => Ok(()),
+                                false => Err(Error)
+                            })
+                    }
+                    Err(_) => Err(Error)
+                }
+            }).ok();
+        }
+    }
+
     /// Enqueue a packet to send, and return a pointer to its payload.
     ///
     /// This function returns `Err(Error::Exhausted)` if the transmit buffer is full,
@@ -241,6 +292,7 @@ impl<'a> Socket<'a> {
     /// **Note:** The IP header is parsed and re-serialized, and may not match
     /// the header actually transmitted bit for bit.
     pub fn send(&mut self, size: usize) -> Result<&mut [u8], SendError> {
+        self.purge_neighbor_discovery();
         let packet_buf = self
             .tx_buffer
             .enqueue(size, ())
@@ -263,6 +315,7 @@ impl<'a> Socket<'a> {
     where
         F: FnOnce(&mut [u8]) -> usize,
     {
+        self.purge_neighbor_discovery();
         let size = self
             .tx_buffer
             .enqueue_with_infallible(max_size, (), f)

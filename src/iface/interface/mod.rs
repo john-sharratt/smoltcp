@@ -944,7 +944,8 @@ impl Interface {
         for item in sockets.items_mut() {
             if !item
                 .meta
-                .egress_permitted(self.inner.now, |ip_addr| self.inner.has_neighbor(&ip_addr))
+                .egress_permitted(self.inner.now, |ip_addr|
+                    self.inner.has_neighbor(&ip_addr) || item.socket.wait_on_neighbor_discovery() == false)
             {
                 continue;
             }
@@ -1032,10 +1033,12 @@ impl Interface {
                     // `NeighborCache` already takes care of rate limiting the neighbor discovery
                     // requests from the socket. However, without an additional rate limiting
                     // mechanism, we would spin on every socket that has yet to discover its
-                    // neighbor.
+                    // neighbor.]
+                    let neighbor_addr = neighbor_addr.expect("non-IP response packet");
+                    item.socket.set_neighbor_discovering(neighbor_addr);
                     item.meta.neighbor_missing(
                         self.inner.now,
-                        neighbor_addr.expect("non-IP response packet"),
+                        neighbor_addr,
                     );
                 }
                 Ok(()) => {}

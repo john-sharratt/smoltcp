@@ -94,6 +94,27 @@ impl<'a> Socket<'a> {
             Socket::Dns(s) => s.poll_at(cx),
         }
     }
+
+    /// Flag that determines if the TX queue should block while its performing
+    /// a neighbor discovery
+    #[inline]
+    pub(crate) fn wait_on_neighbor_discovery(&self) -> bool {
+        match self {
+            #[cfg(feature = "socket-raw")]
+            Socket::Raw(s) => s.wait_on_neighbor_discovery(),
+            _ => true
+        }
+    }
+
+    /// Tells a socket that it is discoverying a neighbor
+    #[inline]
+    pub(crate) fn set_neighbor_discovering(&mut self, neighbor_addr: crate::wire::IpAddress) {
+        match self {
+            #[cfg(feature = "socket-raw")]
+            Socket::Raw(s) => s.set_neighbor_discovering(neighbor_addr),
+            _ => { }
+        }
+    }
 }
 
 /// A conversion trait for network sockets.
