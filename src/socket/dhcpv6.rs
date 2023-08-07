@@ -3,7 +3,7 @@ use core::task::Waker;
 
 use crate::iface::Context;
 use crate::time::{Duration, Instant};
-use crate::wire::dhcpv6::{self, StatusCode};
+use crate::wire::dhcpv6::{self, StatusCode, MAX_IA_ADDRESSES};
 use crate::wire::{
     Dhcpv6MessageType, Dhcpv6Packet, Dhcpv6Repr, IpProtocol, Ipv6Address, Ipv6Cidr, Ipv6Repr,
     UdpRepr, DHCPV6_CLIENT_PORT, DHCPV6_SERVER_PORT, DHCP_MAX_DNS_SERVER_COUNT,
@@ -27,7 +27,7 @@ pub struct Config<'a> {
     /// configuration.
     pub server: ServerInfo,
     /// IP address
-    pub address: Ipv6Cidr,
+    pub addresses: Vec<Ipv6Cidr, MAX_IA_ADDRESSES>,
     /// Router address, also known as default gateway. Does not necessarily
     /// match the DHCP server's address.
     pub router: Option<Ipv6Address>,
@@ -86,7 +86,7 @@ struct DhcpRequestState {
     /// Server we're trying to request from
     server: ServerInfo,
     /// IP address that we're trying to request.
-    requested_ip: Ipv6Address,
+    requested_ip: Vec<Ipv6Address, MAX_IA_ADDRESSES>,
     /// MTU of the network
     mtu: u32,
     /// Info about the prefix
@@ -509,7 +509,7 @@ impl<'a> Socket<'a> {
                         address: src_ip,
                         identifier: server_id,
                     },
-                    requested_ip: ia_na.addresses.first().unwrap().addr,
+                    requested_ip: ia_na.addresses.into_iter().map(|a| a.addr).take(MAX_IA_ADDRESSES).collect(),
                     mtu: state.mtu,
                     iaid: ia_na.iaid,
                     prefix_info: state.prefix_info.clone(),
@@ -667,7 +667,7 @@ impl<'a> Socket<'a> {
             return None;
         }
 
-        let your_addr = ia_na.addresses.first().unwrap().addr;
+        let addresses = ia_na.addresses.iter().map(|a| Ipv6Cidr::new(a.addr, prefix_len)).take(MAX_IA_ADDRESSES).collect();
 
         let mut lease_duration = Duration::from_secs(ia_na.t1 as u64);
         if let Some(max_lease_duration) = max_lease_duration {
@@ -687,7 +687,7 @@ impl<'a> Socket<'a> {
 
         let config = Config {
             server,
-            address: Ipv6Cidr::new(your_addr, prefix_len),
+            addresses,
             router: Some(src_ip),
             dns_servers,
             packet: None,
@@ -821,12 +821,14 @@ impl<'a> Socket<'a> {
                 }
 
                 let mut addresses = Vec::new();
-                addresses.push(dhcpv6::ReprIaAddr {
-                    addr: state.requested_ip,
-                    preferred_lifetime: 604800,
-                    valid_lifetime: 2592000,
-                    additional_options: &[]
-                }).ok();
+                for requested_ip in state.requested_ip.iter() {
+                    addresses.push(dhcpv6::ReprIaAddr {
+                        addr: *requested_ip,
+                        preferred_lifetime: 604800,
+                        valid_lifetime: 2592000,
+                        additional_options: &[]
+                    }).ok();
+                }
 
                 dhcp_repr.message_type = Dhcpv6MessageType::Request;
                 dhcp_repr.client_id = Some(&state.client_id);
@@ -872,14 +874,16 @@ impl<'a> Socket<'a> {
                 }
 
                 let mut addresses = Vec::new();
-                addresses.push(dhcpv6::ReprIaAddr {
-                    addr: state.config.address.address(),
-                    preferred_lifetime: 604800,
-                    valid_lifetime: 2592000,
-                    additional_options: &[]
-                }).ok();
+                for addr in state.config.addresses.iter() {
+                    addresses.push(dhcpv6::ReprIaAddr {
+                        addr: addr.address(),
+                        preferred_lifetime: 604800,
+                        valid_lifetime: 2592000,
+                        additional_options: &[]
+                    }).ok();
+                }
 
-                ipv6_repr.src_addr = state.config.address.address();
+                ipv6_repr.src_addr = Ipv6Address::UNSPECIFIED;
                 ipv6_repr.dst_addr = state.config.server.address;
                 dhcp_repr.message_type = Dhcpv6MessageType::Request;
                 dhcp_repr.client_id = Some(&state.client_id);
@@ -939,7 +943,7 @@ impl<'a> Socket<'a> {
             self.config_changed = false;
             Some(Event::Configured(Config {
                 server: state.config.server.clone(),
-                address: state.config.address,
+                addresses: state.config.addresses.clone(),
                 router: state.config.router,
                 dns_servers: state.config.dns_servers.clone(),
                 packet: self
