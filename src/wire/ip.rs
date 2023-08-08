@@ -850,7 +850,10 @@ pub fn pretty_print_ip_payload<T: Into<Repr>>(
                 }
             }
         }
-        _ => Ok(()),
+        proto => {
+            indent.increase(f)?;
+            write!(f, "{indent}(unknown protocol: {proto})")
+        }
     }
 }
 

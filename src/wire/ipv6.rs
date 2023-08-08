@@ -730,7 +730,7 @@ impl<T: AsRef<[u8]>> PrettyPrint for Packet<T> {
         let (ip_repr, payload) = match Packet::new_checked(buffer) {
             Err(err) => return write!(f, "{indent}({err})"),
             Ok(ip_packet) => match Repr::parse(&ip_packet) {
-                Err(_) => return Ok(()),
+                Err(err) => return write!(f, "{indent}({err})"),
                 Ok(ip_repr) => {
                     write!(f, "{indent}{ip_repr}")?;
                     (ip_repr, ip_packet.payload())

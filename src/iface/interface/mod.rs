@@ -942,12 +942,13 @@ impl Interface {
 
         let mut emitted_any = false;
         for item in sockets.items_mut() {
-            if !item
-                .meta
-                .egress_permitted(self.inner.now, |ip_addr|
-                    self.inner.has_neighbor(&ip_addr) || item.socket.wait_on_neighbor_discovery() == false)
-            {
-                continue;
+            if item.socket.wait_on_neighbor_discovery() {
+                if !item
+                    .meta
+                    .egress_permitted(self.inner.now, |ip_addr| self.inner.has_neighbor(&ip_addr))
+                {
+                    continue;
+                }
             }
 
             let mut neighbor_addr = None;

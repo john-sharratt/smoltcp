@@ -251,7 +251,10 @@ impl<T: AsRef<[u8]>> PrettyPrint for Frame<T> {
                 indent.increase(f)?;
                 super::Ipv6Packet::<&[u8]>::pretty_print(&frame.payload(), f, indent)
             }
-            _ => Ok(()),
+            ether_type => {
+                indent.increase(f)?;
+                write!(f, "{indent}(unknown ether-type: {ether_type})")
+            }
         }
     }
 }
