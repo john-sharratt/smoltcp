@@ -803,7 +803,7 @@ pub fn pretty_print_ip_payload<T: Into<Repr>>(
     f: &mut fmt::Formatter,
     indent: &mut PrettyIndent,
     ip_repr: T,
-    payload: &[u8],
+    mut payload: &[u8],
 ) -> fmt::Result {
     #[cfg(feature = "proto-ipv4")]
     use super::pretty_print::PrettyPrint;
@@ -814,45 +814,71 @@ pub fn pretty_print_ip_payload<T: Into<Repr>>(
 
     let checksum_caps = ChecksumCapabilities::ignored();
     let repr = ip_repr.into();
-    match repr.next_header() {
-        #[cfg(feature = "proto-ipv4")]
-        Protocol::Icmp => {
-            indent.increase(f)?;
-            Icmpv4Packet::<&[u8]>::pretty_print(&payload, f, indent)
-        }
-        Protocol::Icmpv6 => {
-            indent.increase(f)?;
-            Icmpv6Packet::<&[u8]>::pretty_print(&payload, f, indent)
-        }
-        Protocol::Udp => {
-            indent.increase(f)?;
-            super::UdpPacket::<&[u8]>::pretty_print(&payload, f, indent)
-        }
-        Protocol::Tcp => {
-            indent.increase(f)?;
-            match TcpPacket::<&[u8]>::new_checked(payload) {
-                Err(err) => write!(f, "{indent}({err})"),
-                Ok(tcp_packet) => {
-                    match TcpRepr::parse(
-                        &tcp_packet,
-                        &repr.src_addr(),
-                        &repr.dst_addr(),
-                        &checksum_caps,
-                    ) {
-                        Err(err) => write!(f, "{indent}{tcp_packet} ({err})"),
-                        Ok(tcp_repr) => {
-                            write!(f, "{indent}{tcp_repr}")?;
-                            let valid =
-                                tcp_packet.verify_checksum(&repr.src_addr(), &repr.dst_addr());
-                            format_checksum(f, valid)
+
+    let mut next_header = repr.next_header();
+    loop {
+        return match next_header {
+            #[cfg(feature = "proto-ipv4")]
+            Protocol::Icmp => {
+                indent.increase(f)?;
+                Icmpv4Packet::<&[u8]>::pretty_print(&payload, f, indent)
+            }
+            Protocol::Icmpv6 => {
+                indent.increase(f)?;
+                Icmpv6Packet::<&[u8]>::pretty_print(&payload, f, indent)
+            }
+            Protocol::Udp => {
+                indent.increase(f)?;
+                super::UdpPacket::<&[u8]>::pretty_print(&payload, f, indent)
+            }
+            Protocol::Tcp => {
+                indent.increase(f)?;
+                match TcpPacket::<&[u8]>::new_checked(payload) {
+                    Err(err) => write!(f, "{indent}({err})"),
+                    Ok(tcp_packet) => {
+                        match TcpRepr::parse(
+                            &tcp_packet,
+                            &repr.src_addr(),
+                            &repr.dst_addr(),
+                            &checksum_caps,
+                        ) {
+                            Err(err) => write!(f, "{indent}{tcp_packet} ({err})"),
+                            Ok(tcp_repr) => {
+                                write!(f, "{indent}{tcp_repr}")?;
+                                let valid =
+                                    tcp_packet.verify_checksum(&repr.src_addr(), &repr.dst_addr());
+                                format_checksum(f, valid)
+                            }
                         }
                     }
                 }
             }
-        }
-        proto => {
-            indent.increase(f)?;
-            write!(f, "{indent}(unknown protocol: {proto})")
+            Protocol::HopByHop => {
+                indent.increase(f)?;
+                match crate::wire::Ipv6HopByHopHeader::new_checked(payload) {
+                    Ok(frame) => {
+                        match crate::wire::Ipv6HopByHopRepr::parse(&frame) {
+                            Ok(repr) => {
+                                write!(f, "{indent}{repr}")?;
+
+                                // Move onto the next header
+                                if repr.buffer_len() >= payload.len() {
+                                    return Ok(());
+                                }
+                                payload = &payload[repr.buffer_len()..];
+                                next_header = repr.next_header;
+                                continue;
+                            },
+                            Err(err) => write!(f, "({err})")
+                        }
+                    },
+                    Err(err) => write!(f, "({err})")
+                }
+            }
+            proto => {
+                indent.increase(f)?;
+                write!(f, "{indent}(unknown protocol: {proto})")
+            }
         }
     }
 }
