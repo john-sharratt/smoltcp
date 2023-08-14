@@ -658,7 +658,9 @@ impl<'a> Repr<'a> {
         fn emit_contained_packet(buffer: &mut [u8], header: Ipv6Repr, data: &[u8]) {
             let mut ip_packet = Ipv6Packet::new_unchecked(buffer);
             header.emit(&mut ip_packet);
-            let payload = &mut ip_packet.into_inner()[header.buffer_len()..];
+
+            let max = header.buffer_len() + data.len();
+            let payload = &mut ip_packet.into_inner()[header.buffer_len()..max];
             payload.copy_from_slice(data);
         }
 
