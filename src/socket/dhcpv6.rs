@@ -30,7 +30,7 @@ pub struct Config<'a> {
     pub addresses: Vec<(Ipv6Address, Ipv6Cidr), MAX_IA_ADDRESSES>,
     /// Router address, also known as default gateway. Does not necessarily
     /// match the DHCP server's address.
-    pub router: Option<Ipv6Address>,
+    pub router: Option<Ipv6Cidr>,
     /// DNS servers
     pub dns_servers: Vec<Ipv6Address, DHCP_MAX_DNS_SERVER_COUNT>,
     /// Received DHCP packet
@@ -553,7 +553,6 @@ impl<'a> Socket<'a> {
                 if let Some((config, renew_at, expires_at)) =
                     Self::parse_ack(
                         cx.now(),
-                        src_ip,
                         &dhcp_repr,
                         self.max_lease_duration,
                         state.server.clone(),
@@ -613,7 +612,6 @@ impl<'a> Socket<'a> {
                 };
                 if let Some((config, renew_at, expires_at)) = Self::parse_ack(
                     cx.now(),
-                    src_ip,
                     &dhcp_repr,
                     self.max_lease_duration,
                     state.config.server.clone(),
@@ -653,12 +651,11 @@ impl<'a> Socket<'a> {
 
     fn parse_ack(
         now: Instant,
-        src_ip: Ipv6Address,
         dhcp_repr: &Dhcpv6Repr,
         max_lease_duration: Option<Duration>,
         server: ServerInfo,
         ia_na: &Dhcpv6ReprIaNa,
-        _prefix_info: &NdiscPrefixInformation,
+        prefix_info: &NdiscPrefixInformation,
     ) -> Option<(Config<'static>, Instant, Instant)> {
         if ia_na.addresses.is_empty() {
             net_debug!("DHCPv6 ignoring confirm because its missing addresses in the IA_NA section");
@@ -697,7 +694,7 @@ impl<'a> Socket<'a> {
         let config = Config {
             server,
             addresses,
-            router: Some(src_ip),
+            router: Some(Ipv6Cidr::new(prefix_info.prefix, prefix_info.prefix_len)),
             dns_servers,
             packet: None,
         };
