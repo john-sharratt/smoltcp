@@ -30,7 +30,7 @@ pub struct Config<'a> {
     pub addresses: Vec<(Ipv6Address, Ipv6Cidr), MAX_IA_ADDRESSES>,
     /// Router address, also known as default gateway. Does not necessarily
     /// match the DHCP server's address.
-    pub router: Option<Ipv6Cidr>,
+    pub router: Ipv6Cidr,
     /// DNS servers
     pub dns_servers: Vec<Ipv6Address, DHCP_MAX_DNS_SERVER_COUNT>,
     /// Received DHCP packet
@@ -694,7 +694,7 @@ impl<'a> Socket<'a> {
         let config = Config {
             server,
             addresses,
-            router: Some(Ipv6Cidr::new(prefix_info.prefix, prefix_info.prefix_len)),
+            router: Ipv6Cidr::new(prefix_info.prefix, prefix_info.prefix_len),
             dns_servers,
             packet: None,
         };
