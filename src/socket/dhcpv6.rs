@@ -3,7 +3,7 @@ use core::task::Waker;
 
 use crate::iface::Context;
 use crate::time::{Duration, Instant};
-use crate::wire::dhcpv6::{self, StatusCode, MAX_IA_ADDRESSES};
+use crate::wire::dhcpv6::{self, StatusCode, MAX_IA_ADDRESSES, ReprIaPrefix};
 use crate::wire::{
     Dhcpv6MessageType, Dhcpv6Packet, Dhcpv6Repr, IpProtocol, Ipv6Address, Ipv6Cidr, Ipv6Repr,
     UdpRepr, DHCPV6_CLIENT_PORT, DHCPV6_SERVER_PORT, DHCP_MAX_DNS_SERVER_COUNT,
@@ -27,7 +27,7 @@ pub struct Config<'a> {
     /// configuration.
     pub server: ServerInfo,
     /// IP address
-    pub addresses: Vec<Ipv6Cidr, MAX_IA_ADDRESSES>,
+    pub addresses: Vec<(Ipv6Address, Ipv6Cidr), MAX_IA_ADDRESSES>,
     /// Router address, also known as default gateway. Does not necessarily
     /// match the DHCP server's address.
     pub router: Option<Ipv6Address>,
@@ -86,7 +86,7 @@ struct DhcpRequestState {
     /// Server we're trying to request from
     server: ServerInfo,
     /// IP address that we're trying to request.
-    requested_ip: Vec<Ipv6Address, MAX_IA_ADDRESSES>,
+    requested_ip: Vec<(Ipv6Address, Ipv6Cidr), MAX_IA_ADDRESSES>,
     /// MTU of the network
     mtu: u32,
     /// Info about the prefix
@@ -509,7 +509,12 @@ impl<'a> Socket<'a> {
                         address: src_ip,
                         identifier: server_id,
                     },
-                    requested_ip: ia_na.addresses.into_iter().map(|a| a.addr).take(MAX_IA_ADDRESSES).collect(),
+                    requested_ip: ia_na.addresses.into_iter().map(|a| {
+                        (
+                            a.addr,
+                            Ipv6Cidr::new(a.addr, a.prefix.map(|p| p.prefix_len).unwrap_or(128))
+                        )
+                    }).take(MAX_IA_ADDRESSES).collect(),
                     mtu: state.mtu,
                     iaid: ia_na.iaid,
                     prefix_info: state.prefix_info.clone(),
@@ -653,10 +658,8 @@ impl<'a> Socket<'a> {
         max_lease_duration: Option<Duration>,
         server: ServerInfo,
         ia_na: &Dhcpv6ReprIaNa,
-        prefix_info: &NdiscPrefixInformation,
+        _prefix_info: &NdiscPrefixInformation,
     ) -> Option<(Config<'static>, Instant, Instant)> {
-        let prefix_len = prefix_info.prefix_len;
-
         if ia_na.addresses.is_empty() {
             net_debug!("DHCPv6 ignoring confirm because its missing addresses in the IA_NA section");
             return None;
@@ -667,7 +670,13 @@ impl<'a> Socket<'a> {
             return None;
         }
 
-        let addresses = ia_na.addresses.iter().map(|a| Ipv6Cidr::new(a.addr, prefix_len)).take(MAX_IA_ADDRESSES).collect();
+        let addresses = ia_na.addresses.iter().map(|a| {
+            (
+                a.addr,
+                a.prefix.as_ref().map(|p| Ipv6Cidr::new(p.prefix, p.prefix_len))
+                    .unwrap_or(Ipv6Cidr::new(a.addr, 128)),
+            )            
+        }).take(MAX_IA_ADDRESSES).collect();
 
         let mut lease_duration = Duration::from_secs(ia_na.t1 as u64);
         if let Some(max_lease_duration) = max_lease_duration {
@@ -823,7 +832,14 @@ impl<'a> Socket<'a> {
                 let mut addresses = Vec::new();
                 for requested_ip in state.requested_ip.iter() {
                     addresses.push(dhcpv6::ReprIaAddr {
-                        addr: *requested_ip,
+                        addr: requested_ip.0,
+                        prefix: Some(ReprIaPrefix {
+                            preferred_lifetime: 604800,
+                            valid_lifetime: 2592000,
+                            prefix_len: requested_ip.1.prefix_len(),
+                            prefix: requested_ip.1.address(),
+                            additional_options: &[]
+                        }),
                         preferred_lifetime: 604800,
                         valid_lifetime: 2592000,
                         additional_options: &[]
@@ -876,7 +892,14 @@ impl<'a> Socket<'a> {
                 let mut addresses = Vec::new();
                 for addr in state.config.addresses.iter() {
                     addresses.push(dhcpv6::ReprIaAddr {
-                        addr: addr.address(),
+                        addr: addr.0,
+                        prefix: Some(ReprIaPrefix {
+                            preferred_lifetime: 604800,
+                            valid_lifetime: 2592000,
+                            prefix_len: addr.1.prefix_len(),
+                            prefix: addr.1.address(),
+                            additional_options: &[]
+                        }),
                         preferred_lifetime: 604800,
                         valid_lifetime: 2592000,
                         additional_options: &[]

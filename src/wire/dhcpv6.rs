@@ -2163,6 +2163,7 @@ pub struct ReprIaAddr<'a> {
     pub addr: super::ipv6::Address,
     pub preferred_lifetime: u32,
     pub valid_lifetime: u32,
+    pub prefix: Option<ReprIaPrefix<'a>>,
     /// Additional options
     pub additional_options: &'a [Dhcpv6Option<'a>],
 }
@@ -2173,6 +2174,9 @@ impl<'a> ReprIaAddr<'a> {
         len += 16; // addr
         len += 4; // preferred_lifetime
         len += 4; // valid_lifetime
+        if let Some(prefix) = self.prefix.as_ref() {
+            len += 4 + prefix.data_len()
+        }
         for opt in self.additional_options {
             len += 4 + opt.data.len()
         }
@@ -2188,9 +2192,13 @@ impl<'a> ReprIaAddr<'a> {
         let valid_lifetime = u32::from_be_bytes([data[0], data[1], data[2], data[3]]);
         data = &data[4..];
         
+        let mut prefix = None;
         for option in parse_options(data) {
             let data = option.data;
             match (option.kind, data.len()) {
+                (field::OPT_IA_PREFIX, _) => {
+                    prefix = Some(ReprIaPrefix::parse(data)?);
+                }
                 _ => {}
             }
         }
@@ -2199,6 +2207,7 @@ impl<'a> ReprIaAddr<'a> {
             addr,
             preferred_lifetime,
             valid_lifetime,
+            prefix,
             additional_options: &[],
         })
     }
@@ -2225,6 +2234,10 @@ impl<'a> ReprIaAddr<'a> {
         dhcp_options.buffer[0..4].copy_from_slice(&self.valid_lifetime.to_be_bytes());
         dhcp_options.buffer = core::mem::take(&mut dhcp_options.buffer).split_at_mut(4).1;
         
+        if let Some(prefix) = self.prefix.as_ref() {
+            prefix.emit(dhcp_options)?;
+        }
+
         for opt in self.additional_options {
             dhcp_options.emit(*opt)?;
         }
@@ -2239,6 +2252,125 @@ impl<'a> fmt::Display for ReprIaAddr<'a> {
             self.addr,
             self.preferred_lifetime,
             self.valid_lifetime)?;
+        Ok(())
+    }
+}
+
+//     0                   1                   2                   3
+//     0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+//    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+//    |        OPTION_IAPREFIX        |           option-len          |
+//    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+//    |                      preferred-lifetime                       |
+//    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+//    |                        valid-lifetime                         |
+//    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+//    | prefix-length |                                               |
+//    +-+-+-+-+-+-+-+-+          IPv6-prefix                          |
+//    |                           (16 octets)                         |
+//    |                                                               |
+//    |                                                               |
+//    |                                                               |
+//    |               +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+//    |               |                                               .
+//    +-+-+-+-+-+-+-+-+                                               .
+//    .                       IAprefix-options                        .
+//    .                                                               .
+//    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+#[derive(Debug, PartialEq, Eq, Clone)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+pub struct ReprIaPrefix<'a> {
+    /// The address thats represented here
+    pub preferred_lifetime: u32,
+    pub valid_lifetime: u32,
+    pub prefix_len: u8,
+    pub prefix: super::ipv6::Address,
+    /// Additional options
+    pub additional_options: &'a [Dhcpv6Option<'a>],
+}
+
+impl<'a> ReprIaPrefix<'a> {
+    pub fn data_len(&self) -> usize {
+        let mut len = 0;
+        len += 4; // preferred_lifetime
+        len += 4; // valid_lifetime
+        len += 1; // prefix-len
+        len += 16; // prefix
+        for opt in self.additional_options {
+            len += 4 + opt.data.len()
+        }
+        len
+    }
+
+    pub fn parse(mut data: &'a [u8]) -> Result<Self>
+    {
+        let preferred_lifetime = u32::from_be_bytes([data[0], data[1], data[2], data[3]]);
+        data = &data[4..];
+        let valid_lifetime = u32::from_be_bytes([data[0], data[1], data[2], data[3]]);
+        data = &data[4..];
+        let prefix_len = data[0];
+        data = &data[1..];
+        let prefix = super::ipv6::Address::from_bytes(&data[0..16]);
+        data = &data[16..];
+        
+        for option in parse_options(data) {
+            let data = option.data;
+            match (option.kind, data.len()) {
+                _ => {}
+            }
+        }
+
+        Ok(Self {
+            prefix_len,
+            prefix,
+            preferred_lifetime,
+            valid_lifetime,
+            additional_options: &[],
+        })
+    }
+
+    pub fn emit(&self, dhcp_options: &mut Dhcpv6OptionWriter<'a>) -> Result<()>
+    {
+        // OPT TYPE
+        NetworkEndian::write_u16(&mut dhcp_options.buffer[0..2], field::OPT_IA_PREFIX);
+        dhcp_options.buffer = core::mem::take(&mut dhcp_options.buffer).split_at_mut(2).1;
+
+        // OPT LEN
+        NetworkEndian::write_u16(&mut dhcp_options.buffer[0..2], self.data_len() as u16);
+        dhcp_options.buffer = core::mem::take(&mut dhcp_options.buffer).split_at_mut(2).1;
+
+        // preferred_lifetime
+        dhcp_options.buffer[0..4].copy_from_slice(&self.preferred_lifetime.to_be_bytes());
+        dhcp_options.buffer = core::mem::take(&mut dhcp_options.buffer).split_at_mut(4).1;
+
+        // valid_lifetime
+        dhcp_options.buffer[0..4].copy_from_slice(&self.valid_lifetime.to_be_bytes());
+        dhcp_options.buffer = core::mem::take(&mut dhcp_options.buffer).split_at_mut(4).1;
+
+        // Prefix Len
+        dhcp_options.buffer[0] = self.prefix_len;
+        dhcp_options.buffer = core::mem::take(&mut dhcp_options.buffer).split_at_mut(1).1;
+
+        // Prefix
+        dhcp_options.buffer[0..16].copy_from_slice(&self.prefix.0);
+        dhcp_options.buffer = core::mem::take(&mut dhcp_options.buffer).split_at_mut(16).1;
+        
+        for opt in self.additional_options {
+            dhcp_options.emit(*opt)?;
+        }
+
+        Ok(())
+    }
+}
+
+impl<'a> fmt::Display for ReprIaPrefix<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}(preferred-lifetime={} valid-lifetime={} prefix_len={})",
+            self.prefix,
+            self.preferred_lifetime,
+            self.valid_lifetime,
+            self.prefix_len,
+            )?;
         Ok(())
     }
 }
