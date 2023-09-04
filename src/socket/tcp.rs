@@ -699,7 +699,7 @@ impl<'a> Socket<'a> {
 
     /// Swaps the backlogs between this socket and another and
     /// rewires the accept wakers
-    pub(crate) fn swap_backlogs(&mut self, socket: &mut Socket<'_>) {
+    pub(crate) fn swap_backlogs(&mut self, socket: &mut Socket<'a>) {
         std::mem::swap(&mut self.backlog, &mut socket.backlog);
         std::mem::swap(&mut self.accept_waker, &mut socket.accept_waker);
     }
