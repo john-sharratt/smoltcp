@@ -703,6 +703,12 @@ impl<'a> Socket<'a> {
         self.backlog.dequeue_one().map(|handle| handle.clone()).ok()
     }
 
+    /// Returns the number of sockets waiting in the backlog
+    ///
+    pub fn backlog_len(&self) -> usize {
+        self.backlog.len()
+    }
+
     /// Return the timeout duration.
     ///
     /// See also the [set_timeout](#method.set_timeout) method.
