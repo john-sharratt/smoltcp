@@ -42,7 +42,7 @@ impl phy::Device for StmPhy {
     type TxToken<'a> = StmPhyTxToken<'a> where Self: 'a;
 
     fn receive(&mut self, _timestamp: Instant) -> Option<(Self::RxToken<'_>, Self::TxToken<'_>)> {
-        Some((StmPhyRxToken(&mut self.rx_buffer[..]),
+        Some((StmPhyRxToken(&self.rx_buffer[..]),
               StmPhyTxToken(&mut self.tx_buffer[..])))
     }
 
@@ -59,14 +59,14 @@ impl phy::Device for StmPhy {
     }
 }
 
-struct StmPhyRxToken<'a>(&'a mut [u8]);
+struct StmPhyRxToken<'a>(&'a [u8]);
 
 impl<'a> phy::RxToken for StmPhyRxToken<'a> {
-    fn consume<R, F>(mut self, f: F) -> R
-        where F: FnOnce(&mut [u8]) -> R
+    fn consume<R, F>(self, f: F) -> R
+        where F: FnOnce(&[u8]) -> R
     {
         // TODO: receive packet into buffer
-        let result = f(&mut self.0);
+        let result = f(&self.0);
         println!("rx called");
         result
     }
@@ -343,7 +343,7 @@ pub trait RxToken {
     /// packet bytes as argument.
     fn consume<R, F>(self, f: F) -> R
     where
-        F: FnOnce(&mut [u8]) -> R;
+        F: FnOnce(&[u8]) -> R;
 }
 
 /// A token to transmit a single network packet.
