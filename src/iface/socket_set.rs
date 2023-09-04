@@ -65,16 +65,21 @@ impl<'a> SocketSet<'a> {
     ///
     /// # Panics
     /// This function panics if the storage is fixed-size (not a `Vec`) and is full.
-    pub fn swap<T: AnySocket<'a>>(&mut self, handle: SocketHandle, socket: T) -> Socket<'a> {
+    pub fn swap<T: AnySocket<'a>>(&mut self, handle: SocketHandle, socket: T) -> SocketHandle {
         net_trace!("[{}]: swapping", handle.0);
+
+        let non_blocking;
         let mut socket = socket.upcast();
         match self.sockets[handle.0].inner.as_mut() {
             Some(item) => {
+                non_blocking = item.meta.non_blocking();
                 std::mem::swap(&mut socket, &mut item.socket);
-                return socket;
             },
             None => panic!("handle does not refer to a valid socket"),
         }
+
+        let handle = self.add_ext_internal(socket, non_blocking);
+        return handle;
     }
 
     /// Add a socket to the set, with the possibility to adjust the metadata, and return its handle.
@@ -82,6 +87,12 @@ impl<'a> SocketSet<'a> {
     /// # Panics
     /// This function panics if the storage is fixed-size (not a `Vec`) and is full.
     pub fn add_ext<T: AnySocket<'a>>(&mut self, socket: T, non_blocking: bool) -> SocketHandle
+    {
+        let socket = socket.upcast();
+        self.add_ext_internal(socket, non_blocking)
+    }
+
+    fn add_ext_internal(&mut self, socket: Socket<'a>, non_blocking: bool) -> SocketHandle
     {
         fn put<'a, D>(index: usize, slot: &mut SocketStorage<'a>, socket: Socket<'a>, meta_func: D) -> SocketHandle
         where D: FnOnce(&mut Meta) {
@@ -95,8 +106,6 @@ impl<'a> SocketSet<'a> {
             };
             handle
         }
-
-        let socket = socket.upcast();
 
         let meta_func = |meta: &mut Meta| {
             meta.set_non_blocking(non_blocking);

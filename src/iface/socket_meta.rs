@@ -60,6 +60,10 @@ impl Meta {
         self.non_blocking = val;
     }
 
+    pub(crate) fn non_blocking(&mut self) -> bool {
+        self.non_blocking
+    }
+
     pub(crate) fn poll_at<F>(&self, socket_poll_at: PollAt, has_neighbor: F) -> PollAt
     where
         F: Fn(IpAddress) -> bool,
