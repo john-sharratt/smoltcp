@@ -889,6 +889,7 @@ impl<'a> Socket<'a> {
         {
             self.rx_waker.wake_all();
             self.tx_waker.wake_all();
+            self.accept_waker.wake_all();
             self.state_waker.wake_all();
         }
     }
@@ -1360,6 +1361,7 @@ impl<'a> Socket<'a> {
             // For example, a pending read has to fail with an error if the socket is closed.
             self.rx_waker.wake_all();
             self.tx_waker.wake_all();
+            self.accept_waker.wake_all();
             self.state_waker.wake_all();
         }
     }
