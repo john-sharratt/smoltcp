@@ -61,6 +61,22 @@ impl<'a> SocketSet<'a> {
         self.add_ext(socket, false)
     }
 
+    /// Swaps a new socket to a particular handle and returns the old socket that was there
+    ///
+    /// # Panics
+    /// This function panics if the storage is fixed-size (not a `Vec`) and is full.
+    pub fn swap<T: AnySocket<'a>>(&mut self, handle: SocketHandle, socket: T) -> Socket<'a> {
+        net_trace!("[{}]: swapping", handle.0);
+        let mut socket = socket.upcast();
+        match self.sockets[handle.0].inner.as_mut() {
+            Some(item) => {
+                std::mem::swap(&mut socket, &mut item.socket);
+                return socket;
+            },
+            None => panic!("handle does not refer to a valid socket"),
+        }
+    }
+
     /// Add a socket to the set, with the possibility to adjust the metadata, and return its handle.
     ///
     /// # Panics
