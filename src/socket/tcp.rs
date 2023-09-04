@@ -697,6 +697,13 @@ impl<'a> Socket<'a> {
         }
     }
 
+    /// Swaps the backlogs between this socket and another and
+    /// rewires the accept wakers
+    pub(crate) fn swap_backlogs(&mut self, socket: &mut Socket<'_>) {
+        std::mem::swap(&mut self.backlog, &mut socket.backlog);
+        std::mem::swap(&mut self.accept_waker, &mut socket.accept_waker);
+    }
+
     /// Accepts a connection thats waiting in the backlog
     ///
     pub fn accept_backlog(&mut self) -> Option<SocketHandle> {
@@ -707,6 +714,12 @@ impl<'a> Socket<'a> {
     ///
     pub fn backlog_len(&self) -> usize {
         self.backlog.len()
+    }
+
+    /// Returns the maximum number of sockets waiting in the backlog
+    ///
+    pub fn backlog_capacity(&self) -> usize {
+        self.backlog.capacity()
     }
 
     /// Return the timeout duration.

@@ -1615,6 +1615,7 @@ impl InterfaceInner {
         let tx_buffer = tcp::SocketBuffer::new(vec![0; tcp_socket.send_capacity()]);
 
         let mut new_socket = tcp::Socket::new(rx_buffer, tx_buffer);
+        new_socket.swap_backlogs(tcp_socket);
         new_socket.set_hop_limit(tcp_socket.hop_limit());
         new_socket.set_ack_delay(tcp_socket.ack_delay());
         new_socket.set_nagle_enabled(tcp_socket.nagle_enabled());
