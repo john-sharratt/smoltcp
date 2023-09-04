@@ -58,7 +58,7 @@ pub type SocketBuffer<'a> = RingBuffer<'a, u8>;
 /// The state of a TCP socket, according to [RFC 793].
 ///
 /// [RFC 793]: https://tools.ietf.org/html/rfc793
-#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Copy)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum State {
     Closed,
