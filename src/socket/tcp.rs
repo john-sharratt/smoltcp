@@ -489,7 +489,7 @@ impl<'a> Socket<'a> {
             ack_delay_timer: AckDelayTimer::Idle,
             challenge_ack_timer: Instant::from_secs(0),
             nagle: true,
-            backlog: RingBuffer::new([Default::default(); 4]),
+            backlog: RingBuffer::new([Default::default(); 1]),
 
             #[cfg(feature = "async")]
             rx_waker: WakerRegistration::new(),
@@ -500,6 +500,12 @@ impl<'a> Socket<'a> {
             #[cfg(feature = "async")]
             state_waker: WakerRegistration::new(),
         }
+    }
+
+    /// Attaches a backlog to the socket
+    pub fn with_backlog(mut self, buffer: RingBuffer<'a, SocketHandle>) -> Self {
+        self.backlog = buffer;
+        self
     }
 
     /// Register a waker for receive operations.
