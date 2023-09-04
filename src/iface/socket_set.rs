@@ -186,4 +186,9 @@ impl<'a> SocketSet<'a> {
     pub(crate) fn items_mut(&mut self) -> impl Iterator<Item = &mut Item<'a>> + '_ {
         self.sockets.iter_mut().filter_map(|x| x.inner.as_mut())
     }
+
+    /// Iterate every socket in this set with its handle.
+    pub(crate) fn items_and_handles_mut(&mut self) -> impl Iterator<Item = (SocketHandle, &mut Item<'a>)> + '_ {
+        self.sockets.iter_mut().enumerate().filter_map(|(n, x)| x.inner.as_mut().map(|x| (SocketHandle(n), x)))
+    }
 }

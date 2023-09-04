@@ -7,6 +7,7 @@ use core::fmt::Display;
 use core::task::Waker;
 use core::{cmp, fmt, mem};
 
+use crate::iface::SocketHandle;
 #[cfg(feature = "async")]
 use crate::socket::WakerRegistration;
 use crate::socket::{Context, PollAt};
@@ -423,10 +424,15 @@ pub struct Socket<'a> {
     /// Nagle's Algorithm enabled.
     nagle: bool,
 
+    /// Represents the backlog of connections that can be accepted
+    backlog: RingBuffer<'a, SocketHandle>,
+
     #[cfg(feature = "async")]
     rx_waker: WakerRegistration,
     #[cfg(feature = "async")]
     tx_waker: WakerRegistration,
+    #[cfg(feature = "async")]
+    accept_waker: WakerRegistration,
     #[cfg(feature = "async")]
     state_waker: WakerRegistration,
 }
@@ -483,11 +489,14 @@ impl<'a> Socket<'a> {
             ack_delay_timer: AckDelayTimer::Idle,
             challenge_ack_timer: Instant::from_secs(0),
             nagle: true,
+            backlog: RingBuffer::new([Default::default(); 4]),
 
             #[cfg(feature = "async")]
             rx_waker: WakerRegistration::new(),
             #[cfg(feature = "async")]
             tx_waker: WakerRegistration::new(),
+            #[cfg(feature = "async")]
+            accept_waker: WakerRegistration::new(),
             #[cfg(feature = "async")]
             state_waker: WakerRegistration::new(),
         }
@@ -589,11 +598,36 @@ impl<'a> Socket<'a> {
         self.state_waker.add(waker)
     }
 
+    /// Register a waker for accepting new connections.
+    ///
+    /// Notes:
+    ///
+    /// - Only one waker can be registered at a time. If another waker was previously registered,
+    ///   it is overwritten and will no longer be woken.
+    /// - The Waker is woken only once. Once woken, you must register it again to receive more wakes.
+    #[cfg(feature = "async")]
+    pub fn register_accept_waker(&mut self, waker: &Waker) {
+        self.accept_waker.register(waker)
+    }
+
+    /// Adds another waker for accepting changes of the connection.
+    ///
+    /// The waker is woken on accept changes that might affect the status of the connection
+    ///
+    /// Notes:
+    ///
+    /// - The Waker is woken only once. Once woken, you must register it again to receive more wakes.
+    #[cfg(feature = "async")]
+    pub fn add_accept_waker(&mut self, waker: &Waker) {
+        self.accept_waker.add(waker)
+    }
+
     /// Clears all the wakers that were assigned to this socket
     #[cfg(feature = "async")]
     pub fn clear_wakers(&mut self) {
         self.rx_waker.clear();
         self.tx_waker.clear();
+        self.accept_waker.clear();
         self.state_waker.clear();
     }
 
@@ -607,6 +641,12 @@ impl<'a> Socket<'a> {
     #[cfg(feature = "async")]
     pub fn clear_send_waker(&mut self) {
         self.tx_waker.clear();
+    }
+
+    /// Clears all the accept wakers that was assigned to this socket
+    #[cfg(feature = "async")]
+    pub fn clear_accept_waker(&mut self) {
+        self.accept_waker.clear();
     }
 
     /// Clears all the state change wakers that was assigned to this socket
@@ -627,10 +667,34 @@ impl<'a> Socket<'a> {
         self.tx_waker.wake_all();
     }
 
+    /// Trigger the accept waker
+    #[cfg(feature = "async")]
+    pub fn trigger_accept_waker(&mut self) {
+        self.accept_waker.wake_all();
+    }
+
     /// Trigger the state change waker
     #[cfg(feature = "async")]
     pub fn trigger_state_waker(&mut self) {
         self.state_waker.wake_all();
+    }
+
+    /// Adds a child on the backlog of sockets
+    pub(crate) fn push_backlog(&mut self, handle: SocketHandle) -> bool {
+        match self.backlog.enqueue_one() {
+            Ok(entry) => {
+                *entry = handle;
+                self.accept_waker.wake_all();
+                true
+            },
+            Err(_) => false
+        }
+    }
+
+    /// Accepts a connection thats waiting in the backlog
+    ///
+    pub fn accept_backlog(&mut self) -> Option<SocketHandle> {
+        self.backlog.dequeue_one().map(|handle| handle.clone()).ok()
     }
 
     /// Return the timeout duration.

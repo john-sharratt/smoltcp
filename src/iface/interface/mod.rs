@@ -1541,14 +1541,54 @@ impl InterfaceInner {
             &self.caps.checksum
         ));
 
-        for tcp_socket in sockets
-            .items_mut()
-            .filter_map(|i| tcp::Socket::downcast_mut(&mut i.socket))
+        let mut accept_tcp = None;
+        for (handle, tcp_socket) in sockets
+            .items_and_handles_mut()
+            .filter_map(|(h, i)| tcp::Socket::downcast_mut(&mut i.socket).map(|i| (h, i)))
         {
             if tcp_socket.accepts(self, &ip_repr, &tcp_repr) {
-                return tcp_socket
+                let was_listening = tcp_socket.is_listening();
+                let ret = tcp_socket
                     .process(self, &ip_repr, &tcp_repr)
                     .map(IpPacket::Tcp);
+
+                // If the socket was listening but is not any more then we have
+                // to rebuild the socket and put the old one in a queue
+                if was_listening && tcp_socket.is_listening() == false {
+                    accept_tcp = Some((handle.clone(), tcp_socket, ret));
+                    break;
+                }
+                return ret;
+            }
+        }
+
+        // We create a new connection that will listen for the next
+        // connection
+        if let Some((listener_handle, tcp_socket, ret)) = accept_tcp {
+            let new_socket = self.rebuild_tcp_listener(tcp_socket);
+            let new_handle = sockets.swap(listener_handle, new_socket);
+
+            let listener_socket = sockets.get_mut::<tcp::Socket>(listener_handle);
+            match listener_socket.push_backlog(new_handle) {
+                true => {
+                    // Add the child socket onto the backlog and return the response packet
+                    net_trace!(
+                        "TCP connection accepted. (src_addr={}, dst_addr={})",
+                        src_addr,
+                        dst_addr
+                    );
+                    return ret;
+                }
+                false => {
+                    // There is no more room for sockets so close it and set back a reset
+                    sockets.remove(new_handle);
+                    net_trace!(
+                        "socket backlog is full, sending a TCP RST packet. (src_addr={}, dst_addr={})",
+                        src_addr,
+                        dst_addr
+                    );
+                    return Some(IpPacket::Tcp(tcp::Socket::rst_reply(&ip_repr, &tcp_repr)));
+                }
             }
         }
 
@@ -1568,6 +1608,22 @@ impl InterfaceInner {
             // being handled somewhere else)
             None
         }
+    }
+
+    fn rebuild_tcp_listener<'a>(&mut self, tcp_socket: &mut tcp::Socket<'a>) -> tcp::Socket<'a> {
+        let rx_buffer = tcp::SocketBuffer::new(vec![0; tcp_socket.recv_capacity()]);
+        let tx_buffer = tcp::SocketBuffer::new(vec![0; tcp_socket.send_capacity()]);
+
+        let mut new_socket = tcp::Socket::new(rx_buffer, tx_buffer);
+        new_socket.set_hop_limit(tcp_socket.hop_limit());
+        new_socket.set_ack_delay(tcp_socket.ack_delay());
+        new_socket.set_nagle_enabled(tcp_socket.nagle_enabled());
+        new_socket.set_keep_alive(tcp_socket.keep_alive());
+        new_socket.set_timeout(tcp_socket.timeout());
+        new_socket
+            .listen(tcp_socket.listen_endpoint())
+            .ok();
+        new_socket
     }
 
     #[cfg(feature = "medium-ethernet")]
