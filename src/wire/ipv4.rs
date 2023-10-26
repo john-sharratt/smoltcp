@@ -602,6 +602,14 @@ impl<T: AsRef<[u8]> + AsMut<[u8]>> Packet<T> {
 
     /// Return a mutable pointer to the payload.
     #[inline]
+    pub fn as_payload_ref(&self) -> &[u8] {
+        let range = self.header_len() as usize..self.total_len() as usize;
+        let data = self.buffer.as_ref();
+        &data[range]
+    }
+
+    /// Return a mutable pointer to the payload.
+    #[inline]
     pub fn payload_mut(&mut self) -> &mut [u8] {
         let range = self.header_len() as usize..self.total_len() as usize;
         let data = self.buffer.as_mut();
