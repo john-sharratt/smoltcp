@@ -687,14 +687,15 @@ impl<'a> Socket<'a> {
 
     /// Adds a child on the backlog of sockets
     pub(crate) fn push_backlog(&mut self, handle: SocketHandle) -> bool {
-        match self.backlog.enqueue_one() {
+        let ret = match self.backlog.enqueue_one() {
             Ok(entry) => {
                 *entry = handle;
-                self.accept_waker.wake_all();
                 true
             },
             Err(_) => false
-        }
+        };
+        self.accept_waker.wake_all();
+        ret
     }
 
     /// Swaps the backlogs between this socket and another and

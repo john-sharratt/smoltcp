@@ -819,7 +819,6 @@ impl<'a> Socket<'a> {
 
                 if state.retry >= self.retry_config.request_retries {
                     net_debug!("DHCPv6 request retries exceeded, restarting discovery");
-                    drop(state);
                     drop(dhcp_repr);
 
                     self.reset();
@@ -874,7 +873,6 @@ impl<'a> Socket<'a> {
             ClientState::DhcpRenewing(state) => {
                 if state.expires_at <= cx.now() {
                     net_debug!("DHCPv6 lease expired");
-                    drop(state);
                     drop(dhcp_repr);
 
                     self.reset();

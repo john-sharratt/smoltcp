@@ -72,12 +72,12 @@ impl WakerRegistration {
         }
         if self.wake_on_add {
             self.wake_on_add = false;
-            self.wake_all();
+            self.wake_all_internal();
         }
     }
 
     /// Wake all registered wakers, if any.
-    pub fn wake_all(&mut self) {
+    fn wake_all_internal(&mut self) {
         if let Some(mut w) = self.waker.take() {
             w.waker.wake_by_ref();
             let mut waker = w.next.take();
@@ -85,6 +85,13 @@ impl WakerRegistration {
                 w.waker.wake_by_ref();
                 waker = w.next.take();
             }
+        }
+    }
+
+    /// Wake all registered wakers, if any.
+    pub fn wake_all(&mut self) {
+        if self.waker.is_some() {
+            self.wake_all_internal();
         } else {
             self.wake_on_add = true;
         }
