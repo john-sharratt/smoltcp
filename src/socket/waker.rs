@@ -71,6 +71,9 @@ impl WakerRegistration {
             }
         }
         if self.wake_on_add {
+            net_trace!(
+                "wake_all: deferred"
+            );
             self.wake_on_add = false;
             self.wake_all_internal();
         }
@@ -91,8 +94,14 @@ impl WakerRegistration {
     /// Wake all registered wakers, if any.
     pub fn wake_all(&mut self) {
         if self.waker.is_some() {
+            net_trace!(
+                "wake_all: hit"
+            );
             self.wake_all_internal();
         } else {
+            net_trace!(
+                "wake_all: queued"
+            );
             self.wake_on_add = true;
         }
     }
