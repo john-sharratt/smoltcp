@@ -904,7 +904,6 @@ impl<'a> Socket<'a> {
         {
             self.rx_waker.wake_all();
             self.tx_waker.wake_all();
-            self.accept_waker.wake_all();
             self.state_waker.wake_all();
         }
     }
@@ -1363,10 +1362,10 @@ impl<'a> Socket<'a> {
     }
 
     fn set_state(&mut self, state: State) {
-        if self.state != state {
-            tcp_trace!("state={}=>{}", self.state, state);
+        if self.state == state {
+            return;
         }
-
+        tcp_trace!("state={}=>{}", self.state, state);
         self.state = state;
 
         #[cfg(feature = "async")]
@@ -1377,9 +1376,6 @@ impl<'a> Socket<'a> {
             self.rx_waker.wake_all();
             self.tx_waker.wake_all();
             self.state_waker.wake_all();
-            if state != State::Listen {
-                self.accept_waker.wake_all();
-            }
         }
     }
 
