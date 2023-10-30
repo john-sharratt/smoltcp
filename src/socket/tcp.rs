@@ -496,7 +496,7 @@ impl<'a> Socket<'a> {
             #[cfg(feature = "async")]
             tx_waker: WakerRegistration::new(),
             #[cfg(feature = "async")]
-            accept_waker: WakerRegistration::new(),
+            accept_waker: WakerRegistration::new().with_verbose_logging(),
             #[cfg(feature = "async")]
             state_waker: WakerRegistration::new(),
         }

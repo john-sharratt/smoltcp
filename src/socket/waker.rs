@@ -12,6 +12,7 @@ struct WakerNext {
 pub struct WakerRegistration {
     waker: Option<WakerNext>,
     wake_on_add: bool,
+    verbose: bool,
 }
 
 impl WakerRegistration {
@@ -19,6 +20,7 @@ impl WakerRegistration {
         Self {
             waker: None,
             wake_on_add: false,
+            verbose: false,
         }
     }
 
@@ -71,9 +73,11 @@ impl WakerRegistration {
             }
         }
         if self.wake_on_add {
-            net_trace!(
-                "wake_all: deferred"
-            );
+            if self.verbose {
+                net_trace!(
+                    "wake_all: deferred"
+                );
+            }
             self.wake_on_add = false;
             self.wake_all_internal();
         }
@@ -94,14 +98,18 @@ impl WakerRegistration {
     /// Wake all registered wakers, if any.
     pub fn wake_all(&mut self) {
         if self.waker.is_some() {
-            net_trace!(
-                "wake_all: hit"
-            );
+            if self.verbose {
+                net_trace!(
+                    "wake_all: hit"
+                );
+            }
             self.wake_all_internal();
         } else {
-            net_trace!(
-                "wake_all: queued"
-            );
+            if self.verbose {
+                net_trace!(
+                    "wake_all: queued"
+                );
+            }
             self.wake_on_add = true;
         }
     }
@@ -110,5 +118,10 @@ impl WakerRegistration {
     pub fn clear(&mut self) {
         self.wake_on_add = false;
         self.waker.take();
+    }
+
+    pub(crate) fn with_verbose_logging(mut self) -> Self {
+        self.verbose = true;
+        self
     }
 }
