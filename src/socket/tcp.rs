@@ -898,6 +898,7 @@ impl<'a> Socket<'a> {
         self.remote_last_ts = None;
         self.ack_delay_timer = AckDelayTimer::Idle;
         self.challenge_ack_timer = Instant::from_secs(0);
+        self.backlog.clear();
 
         #[cfg(feature = "async")]
         {
@@ -1375,8 +1376,10 @@ impl<'a> Socket<'a> {
             // For example, a pending read has to fail with an error if the socket is closed.
             self.rx_waker.wake_all();
             self.tx_waker.wake_all();
-            self.accept_waker.wake_all();
             self.state_waker.wake_all();
+            if state != State::Listen {
+                self.accept_waker.wake_all();
+            }
         }
     }
 
