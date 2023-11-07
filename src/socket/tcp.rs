@@ -489,7 +489,7 @@ impl<'a> Socket<'a> {
             ack_delay_timer: AckDelayTimer::Idle,
             challenge_ack_timer: Instant::from_secs(0),
             nagle: true,
-            backlog: RingBuffer::new([Default::default(); 1]),
+            backlog: RingBuffer::new([Default::default(); 0]),
 
             #[cfg(feature = "async")]
             rx_waker: WakerRegistration::new(),
@@ -683,6 +683,11 @@ impl<'a> Socket<'a> {
     #[cfg(feature = "async")]
     pub fn trigger_state_waker(&mut self) {
         self.state_waker.wake_all();
+    }
+
+    /// Returns true if the TCP socket has a backlog attached to it
+    pub(crate) fn has_backlog(&self) -> bool {
+        !self.backlog.is_empty()
     }
 
     /// Adds a child on the backlog of sockets

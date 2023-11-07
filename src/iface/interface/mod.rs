@@ -1554,7 +1554,7 @@ impl InterfaceInner {
 
                 // If the socket was listening but is not any more then we have
                 // to rebuild the socket and put the old one in a queue
-                if was_listening && tcp_socket.is_listening() == false {
+                if was_listening && tcp_socket.is_listening() == false && tcp_socket.has_backlog() {
                     accept_tcp = Some((handle.clone(), tcp_socket, ret));
                     break;
                 }
@@ -1562,8 +1562,8 @@ impl InterfaceInner {
             }
         }
 
-        // We create a new connection that will listen for the next
-        // connection
+        // If the interface has a TCP socket with a backlog that has accepted a connection then
+        // we create a new connection that will listen for the next connection
         if let Some((listener_handle, tcp_socket, ret)) = accept_tcp {
             let new_socket = self.rebuild_tcp_listener(tcp_socket);
             let new_handle = sockets.swap(listener_handle, new_socket);
