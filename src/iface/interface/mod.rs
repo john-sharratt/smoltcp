@@ -1843,6 +1843,13 @@ impl InterfaceInner {
         }
     }
 
+    #[cfg(any(feature = "medium-ethernet", feature = "medium-ieee802154"))]
+    pub fn inject_neighbor(&mut self, protocol_addr: IpAddress, hardware_addr: HardwareAddress, timestamp: Instant) {
+        if let Some(cache) = self.neighbor_cache.as_mut() {
+            cache.fill(protocol_addr, hardware_addr, timestamp)
+        }
+    }
+
     fn dispatch_ip<Tx: TxToken>(
         &mut self,
         tx_token: Tx,
